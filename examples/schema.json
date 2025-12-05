@@ -1,0 +1,32 @@
+{
+    "store": {
+        "users": {
+            "id": {
+                "type": "string",
+                "blank": "no",
+                "formatter": "trim|lowercase"
+            },
+            "email": {
+                "type": "string",
+                "blank": "no",
+                "validator": "email|max:100",
+                "formatter": "trim"
+            },
+            "age": {
+                "type": "number",
+                "blank": "yes",
+                "validator": "min:18"
+            }
+        },
+        "orders": {
+            "id": {
+                "type": "string",
+                "blank": "no"
+            },
+            "amount": {
+                "type": "number",
+                "default": "0"
+            }
+        }
+    }
+}
