@@ -75,6 +75,20 @@ func Format(value interface{}, rules []string) (interface{}, error) {
 			if str, ok := value.(string); ok {
 				value = strings.ToUpper(str)
 			}
+		case "prefix":
+			if len(ruleParts) < 2 {
+				continue
+			}
+			if str, ok := value.(string); ok {
+				value = ruleParts[1] + str
+			}
+		case "suffix":
+			if len(ruleParts) < 2 {
+				continue
+			}
+			if str, ok := value.(string); ok {
+				value = str + ruleParts[1]
+			}
 		case "decimal":
 			if len(ruleParts) < 2 {
 				return nil, fmt.Errorf("decimal rule requires precision")

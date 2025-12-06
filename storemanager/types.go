@@ -85,12 +85,13 @@ type Table struct {
 // Column represents a single field in a table.
 // It defines the data type, validation rules, and formatting rules.
 type Column struct {
-	ID        string
-	Name      string
-	Type      DataType
-	Formatter string // e.g., "trim|decimal:2"
-	Validator string // e.g., "required|min:5"
-	Indexed   bool
+	ID           string
+	Name         string
+	Type         DataType
+	Formatter    string // e.g., "trim|decimal:2"
+	Validator    string // e.g., "required|min:5"
+	DefaultValue interface{}
+	Indexed      bool
 
 	// Parsed rules (internal use)
 	FormatterRules []string `json:"-"`

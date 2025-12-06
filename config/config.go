@@ -9,6 +9,7 @@ type Config struct {
 	DBPath        string
 	FlushInterval time.Duration
 	LogLevel      string
+	Port          string
 }
 
 func Load() *Config {
@@ -16,6 +17,7 @@ func Load() *Config {
 		DBPath:        getEnv("DB_PATH", "./store"),
 		FlushInterval: getDurationEnv("FLUSH_INTERVAL", 500*time.Millisecond),
 		LogLevel:      getEnv("LOG_LEVEL", "INFO"),
+		Port:          getEnv("PORT", "5656"),
 	}
 }
 

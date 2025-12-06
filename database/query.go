@@ -44,6 +44,7 @@ package database
 import (
 	"fmt"
 	"onql/storemanager"
+	"strconv"
 )
 
 // Insert adds a new row to a table.
@@ -63,6 +64,25 @@ func (db *DB) Insert(dbName, tableName string, data map[string]interface{}) erro
 
 	for colName, colDef := range table.Columns {
 		val, exists := data[colName]
+
+		// Apply Default Value if missing
+		if !exists && colDef.DefaultValue != nil {
+			val = colDef.DefaultValue
+			exists = true
+		}
+
+		// Automatic Type Conversion (String -> Number/Timestamp)
+		if exists {
+			if strVal, ok := val.(string); ok {
+				switch colDef.Type {
+				case storemanager.TypeNumber, storemanager.TypeTimestamp:
+					// Try parsing as float64
+					if f, err := strconv.ParseFloat(strVal, 64); err == nil {
+						val = f
+					}
+				}
+			}
+		}
 
 		// Apply Validator
 		if len(colDef.ValidatorRules) > 0 {
@@ -132,6 +152,17 @@ func (db *DB) Update(dbName, tableName, pk string, data map[string]interface{}) 
 		if !ok {
 			// Unknown column, ignore or error?
 			continue
+		}
+
+		// Automatic Type Conversion (String -> Number/Timestamp)
+		if strVal, ok := val.(string); ok {
+			switch colDef.Type {
+			case storemanager.TypeNumber, storemanager.TypeTimestamp:
+				// Try parsing as float64
+				if f, err := strconv.ParseFloat(strVal, 64); err == nil {
+					val = f
+				}
+			}
 		}
 
 		if len(colDef.ValidatorRules) > 0 {

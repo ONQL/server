@@ -101,6 +101,22 @@ func Validate(value interface{}, rules []string) error {
 			default:
 				return fmt.Errorf("must be numeric")
 			}
+		case "in":
+			if len(ruleParts) < 2 {
+				return fmt.Errorf("in rule requires values")
+			}
+			allowed := strings.Split(ruleParts[1], ",")
+			strVal := fmt.Sprintf("%v", value) // Simple string conversion for comparison
+			found := false
+			for _, allow := range allowed {
+				if strVal == allow {
+					found = true
+					break
+				}
+			}
+			if !found {
+				return fmt.Errorf("value must be one of: %s", strings.Join(allowed, ", "))
+			}
 		}
 	}
 	return nil

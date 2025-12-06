@@ -30,7 +30,7 @@ var handlers = &responseHandlers{
 
 // Setup starts the TCP server
 func Setup(cfg *config.Config) {
-	port := "8080"
+	port := cfg.Port
 
 	listener, err := net.Listen("tcp", ":"+port)
 	if err != nil {
