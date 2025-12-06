@@ -26,6 +26,9 @@ COPY --from=builder /app/onql-server .
 ENV PORT=5656
 EXPOSE 5656
 
+# Persist data
+VOLUME ["/app/store"]
+
 # Command to run the executable
 CMD ["./onql-server"]
 
