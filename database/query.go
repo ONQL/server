@@ -45,6 +45,8 @@ import (
 	"fmt"
 	"onql/storemanager"
 	"strconv"
+
+	"github.com/google/uuid"
 )
 
 // Insert adds a new row to a table.
@@ -67,8 +69,27 @@ func (db *DB) Insert(dbName, tableName string, data map[string]interface{}) erro
 
 		// Apply Default Value if missing
 		if !exists && colDef.DefaultValue != nil {
-			val = colDef.DefaultValue
-			exists = true
+			if defStr, ok := colDef.DefaultValue.(string); ok {
+				if defStr == "$AUTO" {
+					// Generate Sequence
+					seqVal, err := db.sm.NextSequence(dbName, tableName, colName)
+					if err != nil {
+						return fmt.Errorf("failed to generate sequence for %s: %v", colName, err)
+					}
+					val = seqVal
+					exists = true
+				} else if defStr == "$UUID" {
+					// Generate UUID
+					val = uuid.New().String()
+					exists = true
+				} else {
+					val = colDef.DefaultValue
+					exists = true
+				}
+			} else {
+				val = colDef.DefaultValue
+				exists = true
+			}
 		}
 
 		// Automatic Type Conversion (String -> Number/Timestamp)

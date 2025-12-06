@@ -125,6 +125,7 @@ func (sm *StoreManager) CreateTable(dbName string, table Table) error {
 	table.ID = generateID()
 	for _, col := range table.Columns {
 		col.ID = generateID()
+		col.Indexed = true // Enforce indexing
 	}
 
 	db.Tables[table.Name] = &table
@@ -444,7 +445,7 @@ func (sm *StoreManager) AlterTable(dbName, tableName string, changes map[string]
 			Type:      DataType(colTypeStr),
 			Formatter: getString(colMap, "formatter"),
 			Validator: getString(colMap, "validator"),
-			Indexed:   getBool(colMap, "indexed"),
+			Indexed:   true, // Enforce indexing
 			ID:        generateID(),
 		}
 		// Parse rules
@@ -511,9 +512,8 @@ func (sm *StoreManager) AlterTable(dbName, tableName string, changes map[string]
 			existingCol.Validator = validator
 			existingCol.ValidatorRules = strings.Split(validator, "|")
 		}
-		if indexed, ok := colMap["indexed"].(bool); ok {
-			existingCol.Indexed = indexed
-		}
+		// Enforce indexing always
+		existingCol.Indexed = true
 	}
 
 	// Rename Column

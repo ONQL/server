@@ -99,3 +99,9 @@ func ParseIndexKey(key []byte) (dbID, tableID, colID, val, pk string) {
 	// IDX:dbID:tableID:colID:val:pk
 	return parts[1], parts[2], parts[3], parts[4], parts[5]
 }
+
+// SequenceKey generates the key for storing a column sequence counter.
+// Format: SEQ:<dbID>:<tableID>:<colID>
+func SequenceKey(dbID, tableID, colID string) []byte {
+	return []byte(fmt.Sprintf("SEQ:%s:%s:%s", dbID, tableID, colID))
+}

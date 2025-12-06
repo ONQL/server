@@ -45,8 +45,64 @@ import (
 	"encoding/json"
 	"fmt"
 	"onql/common"
+	"strconv"
 	"strings"
 )
+
+// NextSequence increments and returns the next value for a column sequence.
+func (sm *StoreManager) NextSequence(dbName, tableName, colName string) (int, error) {
+	sm.schema.Mu.RLock()
+	db, ok := sm.schema.Databases[dbName]
+	if !ok {
+		sm.schema.Mu.RUnlock()
+		return 0, fmt.Errorf("database %s not found", dbName)
+	}
+	table, ok := db.Tables[tableName]
+	if !ok {
+		sm.schema.Mu.RUnlock()
+		return 0, fmt.Errorf("table %s not found", tableName)
+	}
+	col, ok := table.Columns[colName]
+	if !ok {
+		sm.schema.Mu.RUnlock()
+		return 0, fmt.Errorf("column %s not found", colName)
+	}
+	sm.schema.Mu.RUnlock() // unlock early as we use IDs now
+
+	key := SequenceKey(db.ID, table.ID, col.ID)
+
+	// We need atomic increment. The Engine interface doesn't strictly provide it,
+	// but we can lock on the key or use a global lock.
+	// For simplicity, we'll use a lock here or rely on the engine if it supported it.
+	// Badger has Sequence, but our interface is generic.
+	// We'll use a simple Get-Increment-Set with a lock.
+	// Ideally, this should be finer-grained locking.
+
+	sm.flushMutex.Lock() // Reusing a lock or need a new one? flushMutex might be too broad.
+	defer sm.flushMutex.Unlock()
+
+	valBytes, err := sm.engine.Get(key)
+	var current int
+	if err != nil {
+		if err == common.ErrNotFound {
+			current = 0
+		} else {
+			return 0, err
+		}
+	} else {
+		current, err = strconv.Atoi(string(valBytes))
+		if err != nil {
+			return 0, err
+		}
+	}
+
+	next := current + 1
+	if err := sm.engine.Set(key, []byte(strconv.Itoa(next))); err != nil {
+		return 0, err
+	}
+
+	return next, nil
+}
 
 // Insert adds a new row to the specified table.
 // It validates the primary key, checks for duplicates in both buffer and disk,
