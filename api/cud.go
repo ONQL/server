@@ -62,10 +62,14 @@ func HandleUpdate(payload string) map[string]string {
 			return map[string]string{"error": err.Error(), "data": ""}
 		}
 
-		var ok bool
-		pks, ok = result.([]string)
-		if !ok {
-			return map[string]string{"error": "ids not returned by query", "data": ""}
+		if result == nil {
+			pks = []string{}
+		} else {
+			var ok bool
+			pks, ok = result.([]string)
+			if !ok {
+				return map[string]string{"error": "ids not returned by query", "data": ""}
+			}
 		}
 	}
 
@@ -109,10 +113,14 @@ func HandleDelete(payload string) map[string]string {
 			return map[string]string{"error": err.Error(), "data": ""}
 		}
 
-		var ok bool
-		pks, ok = result.([]string)
-		if !ok {
-			return map[string]string{"error": "ids not returned by query", "data": ""}
+		if result == nil {
+			pks = []string{}
+		} else {
+			var ok bool
+			pks, ok = result.([]string)
+			if !ok {
+				return map[string]string{"error": "ids not returned by query", "data": ""}
+			}
 		}
 	}
 
