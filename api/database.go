@@ -46,7 +46,10 @@ func callDatabaseFunc(name string, args []json.RawMessage) (any, error) {
 		}
 		var name string
 		json.Unmarshal(args[0], &name)
-		return nil, db.CreateDatabase(name)
+		if err := db.CreateDatabase(name); err != nil {
+			return nil, err
+		}
+		return "success", nil
 
 	case "DropDatabase":
 		if len(args) != 1 {
@@ -54,7 +57,10 @@ func callDatabaseFunc(name string, args []json.RawMessage) (any, error) {
 		}
 		var name string
 		json.Unmarshal(args[0], &name)
-		return nil, db.DropDatabase(name)
+		if err := db.DropDatabase(name); err != nil {
+			return nil, err
+		}
+		return "success", nil
 
 	case "CreateTable":
 		if len(args) != 2 {
@@ -64,7 +70,10 @@ func callDatabaseFunc(name string, args []json.RawMessage) (any, error) {
 		var table storemanager.Table
 		json.Unmarshal(args[0], &dbName)
 		json.Unmarshal(args[1], &table)
-		return nil, db.CreateTable(dbName, table)
+		if err := db.CreateTable(dbName, table); err != nil {
+			return nil, err
+		}
+		return "success", nil
 
 	case "DropTable":
 		if len(args) != 2 {
@@ -73,7 +82,10 @@ func callDatabaseFunc(name string, args []json.RawMessage) (any, error) {
 		var dbName, tableName string
 		json.Unmarshal(args[0], &dbName)
 		json.Unmarshal(args[1], &tableName)
-		return nil, db.DropTable(dbName, tableName)
+		if err := db.DropTable(dbName, tableName); err != nil {
+			return nil, err
+		}
+		return "success", nil
 
 	case "Insert":
 		if len(args) != 3 {
@@ -106,7 +118,10 @@ func callDatabaseFunc(name string, args []json.RawMessage) (any, error) {
 		json.Unmarshal(args[1], &tableName)
 		json.Unmarshal(args[2], &pk)
 		json.Unmarshal(args[3], &data)
-		return nil, db.Update(dbName, tableName, pk, data)
+		if err := db.Update(dbName, tableName, pk, data); err != nil {
+			return nil, err
+		}
+		return "success", nil
 
 	case "Delete":
 		if len(args) != 3 {
@@ -116,7 +131,10 @@ func callDatabaseFunc(name string, args []json.RawMessage) (any, error) {
 		json.Unmarshal(args[0], &dbName)
 		json.Unmarshal(args[1], &tableName)
 		json.Unmarshal(args[2], &pk)
-		return nil, db.Delete(dbName, tableName, pk)
+		if err := db.Delete(dbName, tableName, pk); err != nil {
+			return nil, err
+		}
+		return "success", nil
 
 	default:
 		return nil, fmt.Errorf("function %q not found", name)

@@ -105,7 +105,10 @@ func createSchema(args []interface{}) (interface{}, error) {
 		if !ok {
 			return nil, fmt.Errorf("invalid database name")
 		}
-		return nil, db.CreateDatabase(dbName)
+		if err := db.CreateDatabase(dbName); err != nil {
+			return nil, err
+		}
+		return "success", nil
 	}
 
 	if targetType == "table" {
@@ -131,7 +134,10 @@ func createSchema(args []interface{}) (interface{}, error) {
 			if err != nil {
 				return nil, err
 			}
-			return nil, db.CreateTable(dbName, *table)
+			if err := db.CreateTable(dbName, *table); err != nil {
+				return nil, err
+			}
+			return "success", nil
 		}
 		return nil, fmt.Errorf("create table usage: create table <db> <table> <def>")
 	}
@@ -149,7 +155,10 @@ func setSchema(args []interface{}) (interface{}, error) {
 		return nil, fmt.Errorf("invalid schema format, expected JSON object")
 	}
 
-	return nil, syncDatabases(schemaMap)
+	if err := syncDatabases(schemaMap); err != nil {
+		return nil, err
+	}
+	return "success", nil
 }
 
 func syncDatabases(targetSchema map[string]interface{}) error {
@@ -341,14 +350,20 @@ func renameSchema(args []interface{}) (interface{}, error) {
 	if len(args) == 3 {
 		oldName, _ := args[1].(string)
 		newName, _ := args[2].(string)
-		return nil, db.RenameDatabase(oldName, newName)
+		if err := db.RenameDatabase(oldName, newName); err != nil {
+			return nil, err
+		}
+		return "success", nil
 	}
 
 	if len(args) == 4 {
 		dbName, _ := args[1].(string)
 		oldName, _ := args[2].(string)
 		newName, _ := args[3].(string)
-		return nil, db.RenameTable(dbName, oldName, newName)
+		if err := db.RenameTable(dbName, oldName, newName); err != nil {
+			return nil, err
+		}
+		return "success", nil
 	}
 
 	return nil, fmt.Errorf("invalid rename arguments")
@@ -365,7 +380,10 @@ func dropSchema(args []interface{}) (interface{}, error) {
 	}
 
 	if len(args) == 1 {
-		return nil, db.DropDatabase(dbName)
+		if err := db.DropDatabase(dbName); err != nil {
+			return nil, err
+		}
+		return "success", nil
 	}
 
 	tableName, ok := args[1].(string)
@@ -373,7 +391,10 @@ func dropSchema(args []interface{}) (interface{}, error) {
 		return nil, fmt.Errorf("invalid table name")
 	}
 
-	return nil, db.DropTable(dbName, tableName)
+	if err := db.DropTable(dbName, tableName); err != nil {
+		return nil, err
+	}
+	return "success", nil
 }
 
 func alterSchema(args []interface{}) (interface{}, error) {
@@ -385,7 +406,10 @@ func alterSchema(args []interface{}) (interface{}, error) {
 	tableName, _ := args[1].(string)
 	changes, _ := args[2].(map[string]interface{})
 
-	return nil, db.AlterTable(dbName, tableName, changes)
+	if err := db.AlterTable(dbName, tableName, changes); err != nil {
+		return nil, err
+	}
+	return "success", nil
 }
 
 func getString(m map[string]interface{}, key string) string {

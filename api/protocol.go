@@ -98,7 +98,7 @@ func setProtocol(args []interface{}) (interface{}, error) {
 		return nil, err
 	}
 
-	return "Protocol set successfully", nil
+	return "success", nil
 }
 
 func dropProtocol(args []interface{}) (interface{}, error) {
@@ -115,5 +115,5 @@ func dropProtocol(args []interface{}) (interface{}, error) {
 		return nil, err
 	}
 
-	return "Protocol deleted successfully", nil
+	return "success", nil
 }
