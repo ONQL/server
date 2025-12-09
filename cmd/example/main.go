@@ -58,7 +58,7 @@ func main() {
 		"name":  "Laptop",
 		"price": 1200.50,
 	}
-	err = db.Insert(dbName, tableName, product1)
+	_, err = db.Insert(dbName, tableName, product1)
 	if err != nil {
 		log.Fatal(err)
 	}
@@ -69,7 +69,7 @@ func main() {
 		"name":  "Mouse",
 		"price": 25.00,
 	}
-	err = db.Insert(dbName, tableName, product2)
+	_, err = db.Insert(dbName, tableName, product2)
 	if err != nil {
 		log.Fatal(err)
 	}

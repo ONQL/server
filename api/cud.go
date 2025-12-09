@@ -36,13 +36,13 @@ func HandleInsert(payload string) map[string]string {
 		return map[string]string{"error": err.Error(), "data": ""}
 	}
 
-	// Call the insert function
-	err := db.Insert(insData.DB, insData.Table, insData.Records)
+	// Call the insert function and get the generated ID
+	id, err := db.Insert(insData.DB, insData.Table, insData.Records)
 	if err != nil {
 		return map[string]string{"error": err.Error(), "data": ""}
 	}
 
-	return map[string]string{"error": "", "data": "success"}
+	return map[string]string{"error": "", "data": id}
 }
 
 // HandleUpdate handles update operations with query or IDs

@@ -54,11 +54,12 @@ import (
 // 1. Retrieves the table schema.
 // 2. Validates and formats the input data against the table columns.
 // 3. Constructs a Row object and delegates the insertion to the StoreManager.
-func (db *DB) Insert(dbName, tableName string, data map[string]interface{}) error {
+// Returns the primary key value of the inserted row and any error encountered.
+func (db *DB) Insert(dbName, tableName string, data map[string]interface{}) (string, error) {
 	// 1. Get Schema
 	_, table, err := db.sm.GetTableSchema(dbName, tableName)
 	if err != nil {
-		return err
+		return "", err
 	}
 
 	// 2. Validate and Format
@@ -74,7 +75,7 @@ func (db *DB) Insert(dbName, tableName string, data map[string]interface{}) erro
 					// Generate Sequence
 					seqVal, err := db.sm.NextSequence(dbName, tableName, colName)
 					if err != nil {
-						return fmt.Errorf("failed to generate sequence for %s: %v", colName, err)
+						return "", fmt.Errorf("failed to generate sequence for %s: %v", colName, err)
 					}
 					val = seqVal
 					exists = true
@@ -111,15 +112,15 @@ func (db *DB) Insert(dbName, tableName string, data map[string]interface{}) erro
 			// Validator handles "required".
 			if !exists {
 				if err := Validate(nil, colDef.ValidatorRules); err != nil {
-					return fmt.Errorf("column %s: %v", colName, err)
+					return "", fmt.Errorf("column %s: %v", colName, err)
 				}
 			} else {
 				if err := Validate(val, colDef.ValidatorRules); err != nil {
-					return fmt.Errorf("column %s: %v", colName, err)
+					return "", fmt.Errorf("column %s: %v", colName, err)
 				}
 				// Type check
 				if err := ValidateType(val, string(colDef.Type)); err != nil {
-					return fmt.Errorf("column %s: %v", colName, err)
+					return "", fmt.Errorf("column %s: %v", colName, err)
 				}
 			}
 		}
@@ -129,7 +130,7 @@ func (db *DB) Insert(dbName, tableName string, data map[string]interface{}) erro
 			if len(colDef.FormatterRules) > 0 {
 				formattedVal, err := Format(val, colDef.FormatterRules)
 				if err != nil {
-					return fmt.Errorf("column %s format error: %v", colName, err)
+					return "", fmt.Errorf("column %s format error: %v", colName, err)
 				}
 				val = formattedVal
 			}
@@ -139,7 +140,17 @@ func (db *DB) Insert(dbName, tableName string, data map[string]interface{}) erro
 
 	// 3. Insert
 	row := storemanager.Row{Data: processedData}
-	return db.sm.Insert(dbName, tableName, row)
+	err = db.sm.Insert(dbName, tableName, row)
+	if err != nil {
+		return "", err
+	}
+
+	// 4. Return the primary key value
+	pkVal, ok := processedData[table.PK]
+	if !ok {
+		return "", fmt.Errorf("primary key %s not found in processed data", table.PK)
+	}
+	return fmt.Sprintf("%v", pkVal), nil
 }
 
 // Update modifies an existing row in a table.

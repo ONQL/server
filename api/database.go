@@ -84,7 +84,7 @@ func callDatabaseFunc(name string, args []json.RawMessage) (any, error) {
 		json.Unmarshal(args[0], &dbName)
 		json.Unmarshal(args[1], &tableName)
 		json.Unmarshal(args[2], &data)
-		return nil, db.Insert(dbName, tableName, data)
+		return db.Insert(dbName, tableName, data)
 
 	case "Get":
 		if len(args) != 3 {
