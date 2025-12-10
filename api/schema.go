@@ -4,6 +4,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"onql/storemanager"
+	"strings"
 )
 
 func handleSchemaRequest(msg *Message) string {
@@ -264,7 +265,8 @@ func syncColumns(dbName, tableName string, targetTable *storemanager.Table) erro
 			if oldCol.Type != newCol.Type ||
 				oldCol.Formatter != newCol.Formatter ||
 				oldCol.Validator != newCol.Validator ||
-				oldCol.Indexed != newCol.Indexed {
+				oldCol.Indexed != newCol.Indexed ||
+				!isDefaultEqual(oldCol.DefaultValue, newCol.DefaultValue) {
 
 				change := map[string]interface{}{
 					"modifyColumn": map[string]interface{}{
@@ -273,6 +275,7 @@ func syncColumns(dbName, tableName string, targetTable *storemanager.Table) erro
 						"formatter": newCol.Formatter,
 						"validator": newCol.Validator,
 						"indexed":   newCol.Indexed,
+						"default":   newCol.DefaultValue,
 					},
 				}
 				if err := db.AlterTable(dbName, tableName, change); err != nil {
@@ -322,7 +325,9 @@ func parseTableDefinition(name string, colsDef map[string]interface{}) (*storema
 			if validator == "" {
 				validator = "required"
 			} else {
-				validator = "required|" + validator
+				if !containsRequired(validator) {
+					validator = "required|" + validator
+				}
 			}
 		}
 
@@ -419,4 +424,21 @@ func getString(m map[string]interface{}, key string) string {
 		}
 	}
 	return ""
+}
+
+func isDefaultEqual(v1, v2 interface{}) bool {
+	if v1 == nil && v2 == nil {
+		return true
+	}
+	if v1 == nil || v2 == nil {
+		return false
+	}
+	// Convert both to string for comparison to handle type differences (e.g. json number vs int)
+	s1 := fmt.Sprintf("%v", v1)
+	s2 := fmt.Sprintf("%v", v2)
+	return s1 == s2
+}
+
+func containsRequired(validator string) bool {
+	return strings.Contains(validator, "required")
 }

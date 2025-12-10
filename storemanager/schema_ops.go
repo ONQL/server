@@ -441,12 +441,13 @@ func (sm *StoreManager) AlterTable(dbName, tableName string, changes map[string]
 
 		colTypeStr, _ := colMap["type"].(string)
 		col := &Column{
-			Name:      colName,
-			Type:      DataType(colTypeStr),
-			Formatter: getString(colMap, "formatter"),
-			Validator: getString(colMap, "validator"),
-			Indexed:   true, // Enforce indexing
-			ID:        generateID(),
+			Name:         colName,
+			Type:         DataType(colTypeStr),
+			Formatter:    getString(colMap, "formatter"),
+			Validator:    getString(colMap, "validator"),
+			DefaultValue: colMap["default"],
+			Indexed:      true, // Enforce indexing
+			ID:           generateID(),
 		}
 		// Parse rules
 		if col.Formatter != "" {
@@ -511,6 +512,9 @@ func (sm *StoreManager) AlterTable(dbName, tableName string, changes map[string]
 		if validator, ok := colMap["validator"].(string); ok {
 			existingCol.Validator = validator
 			existingCol.ValidatorRules = strings.Split(validator, "|")
+		}
+		if _, ok := colMap["default"]; ok {
+			existingCol.DefaultValue = colMap["default"]
 		}
 		// Enforce indexing always
 		existingCol.Indexed = true

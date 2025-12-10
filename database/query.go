@@ -83,6 +83,10 @@ func (db *DB) Insert(dbName, tableName string, data map[string]interface{}) (str
 					// Generate UUID
 					val = uuid.New().String()
 					exists = true
+				} else if defStr == "$EMPTY" {
+					// Set to empty string
+					val = ""
+					exists = true
 				} else {
 					val = colDef.DefaultValue
 					exists = true
@@ -115,7 +119,33 @@ func (db *DB) Insert(dbName, tableName string, data map[string]interface{}) (str
 					return "", fmt.Errorf("column %s: %v", colName, err)
 				}
 			} else {
-				if err := Validate(val, colDef.ValidatorRules); err != nil {
+				// Runtime check: if default was applied AND it was $EMPTY (resulting in empty string),
+				// AND the column is supposed to be required, we should allow it.
+				// However, standard logic says if required, "" is invalid.
+				// If we want $EMPTY to mean "allow empty string even if required",
+				// we must strip "required" from rules for this validation call.
+
+				rules := colDef.ValidatorRules
+				if strVal, ok := val.(string); ok && strVal == "" {
+					// Check if this came from $EMPTY default
+					isDefaultEmpty := false
+					if defStr, ok := colDef.DefaultValue.(string); ok && defStr == "$EMPTY" {
+						isDefaultEmpty = true
+					}
+
+					if isDefaultEmpty {
+						// Filter out "required"
+						newRules := []string{}
+						for _, r := range rules {
+							if r != "required" {
+								newRules = append(newRules, r)
+							}
+						}
+						rules = newRules
+					}
+				}
+
+				if err := Validate(val, rules); err != nil {
 					return "", fmt.Errorf("column %s: %v", colName, err)
 				}
 				// Type check
