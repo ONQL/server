@@ -223,12 +223,22 @@ func GetColSchemaFromProtoName(protoPass, dbName, tableName, columnName string) 
 		return nil, fmt.Errorf("field %s not found in entity %s", columnName, tableName)
 	}
 
+	// Fetch actual table schema to get the type
+	tableSchema, err := globalDB.GetTableSchema(module.Database, entity.Table)
+	if err != nil {
+		return nil, err
+	}
+	colDef, ok := tableSchema.Columns[actualFieldName]
+	if !ok {
+		return nil, fmt.Errorf("column %s not found in table schema %s.%s", actualFieldName, module.Database, entity.Table)
+	}
+
 	// Return metadata about the column
 	return map[string]string{
 		"name":  actualFieldName,
 		"alias": columnName,
 		"table": entity.Table,
-		"type":  "string", // TODO: Get actual type from schema
+		"type":  string(colDef.Type),
 	}, nil
 }
 
