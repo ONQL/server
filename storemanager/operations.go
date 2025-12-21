@@ -125,8 +125,19 @@ func (sm *StoreManager) Insert(dbName, tableName string, row Row) error {
 
 	// 2. Check if exists (Buffer or Disk)
 	dataKey := string(DataKey(dbID, table.ID, pkStr))
-	if _, exists, isDeleted := sm.buffer.Get(dataKey); exists && !isDeleted {
-		return common.ErrDuplicate
+	if _, exists, isDeleted := sm.buffer.Get(dataKey); exists {
+		if !isDeleted {
+			return common.ErrDuplicate
+		}
+	} else {
+		// key not in buffer, check disk
+		_, err := sm.engine.Get([]byte(dataKey))
+		if err == nil {
+			return common.ErrDuplicate
+		}
+		if err != common.ErrNotFound {
+			return err
+		}
 	}
 
 	// 3. Serialize

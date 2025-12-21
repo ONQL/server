@@ -204,7 +204,20 @@ func (e *Evaluator) EvalRelatedTable() error {
 		if !ok {
 			return fmt.Errorf("host table data not found for getting related table data")
 		}
-		data, err := GetRelatedTableData(stmt.Meta["db"], *stmt.Expressions.(*storemanager.Relation), val[fkKey].(string))
+		// data, err := GetRelatedTableData(stmt.Meta["db"], *stmt.Expressions.(*storemanager.Relation), val[fkKey].(string))
+		// handle non string types
+		var fkValue string
+		switch v := val[fkKey].(type) {
+		case string:
+			fkValue = v
+		case float64:
+			fkValue = strconv.FormatFloat(v, 'f', -1, 64)
+		case int:
+			fkValue = strconv.Itoa(v)
+		default:
+			fkValue = fmt.Sprintf("%v", v)
+		}
+		data, err := GetRelatedTableData(stmt.Meta["db"], *stmt.Expressions.(*storemanager.Relation), fkValue)
 		if err != nil {
 			return err
 		}
@@ -215,7 +228,19 @@ func (e *Evaluator) EvalRelatedTable() error {
 			return fmt.Errorf("host table data not found for getting related table data")
 		}
 		for _, val := range tabledata {
-			data, err := GetRelatedTableData(stmt.Meta["db"], *stmt.Expressions.(*storemanager.Relation), val[fkKey].(string))
+			// data, err := GetRelatedTableData(stmt.Meta["db"], *stmt.Expressions.(*storemanager.Relation), val[fkKey].(string))
+			var fkValue string
+			switch v := val[fkKey].(type) {
+			case string:
+				fkValue = v
+			case float64:
+				fkValue = strconv.FormatFloat(v, 'f', -1, 64)
+			case int:
+				fkValue = strconv.Itoa(v)
+			default:
+				fkValue = fmt.Sprintf("%v", v)
+			}
+			data, err := GetRelatedTableData(stmt.Meta["db"], *stmt.Expressions.(*storemanager.Relation), fkValue)
 			if err != nil {
 				return err
 			}
