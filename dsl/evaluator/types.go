@@ -1,6 +1,7 @@
 package evaluator
 
 import (
+	"context"
 	"encoding/json"
 	"fmt"
 	"onql/dsl/parser"
@@ -8,6 +9,7 @@ import (
 )
 
 type Evaluator struct {
+	Ctx            context.Context
 	Plan           *parser.Plan
 	Memory         map[string]any
 	Result         any
@@ -16,8 +18,9 @@ type Evaluator struct {
 	ProjectionPath []string
 }
 
-func NewEvaluator(plan *parser.Plan, ContextKey string, contextValues []string) *Evaluator {
+func NewEvaluator(ctx context.Context, plan *parser.Plan, ContextKey string, contextValues []string) *Evaluator {
 	return &Evaluator{
+		Ctx:           ctx,
 		Plan:          plan,
 		Memory:        make(map[string]any),
 		Result:        make([]any, 0),

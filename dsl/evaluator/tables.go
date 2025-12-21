@@ -151,7 +151,7 @@ func (e *Evaluator) EvalTableWithContext() error {
 	if err != nil {
 		return err
 	}
-	eval := NewEvaluator(plan, "", []string{cntxQuery})
+	eval := NewEvaluator(e.Ctx, plan, "", []string{cntxQuery})
 	err = eval.Eval()
 	if err != nil {
 		return err

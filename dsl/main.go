@@ -1,12 +1,18 @@
 package dsl
 
 import (
+	"context"
 	"errors"
 	"fmt"
 	"onql/dsl/evaluator"
 	"onql/dsl/parser"
 	"runtime/debug"
 	"strings"
+	"sync/atomic"
+)
+
+var (
+	ActiveQueries int64
 )
 
 // func Execute(protoPass string, query string, ctxKey string, ctxValues []string) (any, error) {
@@ -34,7 +40,11 @@ import (
 //	return evaluator.Result, nil
 // }
 
-func Execute(protoPass string, query string, ctxKey string, ctxValues []string) (res any, err error) {
+func Execute(ctx context.Context, protoPass string, query string, ctxKey string, ctxValues []string) (res any, err error) {
+	// Track active query
+	atomic.AddInt64(&ActiveQueries, 1)
+	defer atomic.AddInt64(&ActiveQueries, -1)
+
 	// Catch ANY panic in this goroutine and return it as an error
 	defer func() {
 		if r := recover(); r != nil {
@@ -59,13 +69,21 @@ func Execute(protoPass string, query string, ctxKey string, ctxValues []string) 
 		return nil, errors.New("query required")
 	}
 
+	// Check context before starting
+	select {
+	case <-ctx.Done():
+		return nil, ctx.Err()
+	default:
+	}
+
 	lexer := parser.NewLexer(query)
 	plan := parser.NewPlan(lexer, protoPass)
 	if err = plan.Parse(); err != nil {
 		return nil, err
 	}
 
-	ev := evaluator.NewEvaluator(plan, ctxKey, ctxValues)
+	// Pass context to evaluator
+	ev := evaluator.NewEvaluator(ctx, plan, ctxKey, ctxValues)
 	if err = ev.Eval(); err != nil {
 		return nil, err
 	}

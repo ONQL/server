@@ -37,6 +37,9 @@ func Setup(cfg *config.Config) {
 		log.Fatal("Error starting TCP server:", err)
 	}
 
+	// Wire up stats
+	api.GetConnectionCount = GetConnectionCount
+
 	defer listener.Close()
 	log.Println("🚀 Server started on port", port)
 
@@ -48,6 +51,13 @@ func Setup(cfg *config.Config) {
 		}
 		go handleConnection(conn)
 	}
+}
+
+// GetConnectionCount returns number of active connections
+func GetConnectionCount() int {
+	handlers.mu.RLock()
+	defer handlers.mu.RUnlock()
+	return len(handlers.handlers)
 }
 
 func handleConnection(conn net.Conn) {

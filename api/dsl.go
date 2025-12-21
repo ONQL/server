@@ -1,9 +1,11 @@
 package api
 
 import (
+	"context"
 	"encoding/json"
 	"fmt"
 	"onql/dsl"
+	"time"
 )
 
 // DSLRequest represents a DSL query request
@@ -20,7 +22,11 @@ func handleDSLRequest(msg *Message) string {
 		return errorResponse(fmt.Sprintf("invalid payload: %v", err))
 	}
 
-	result, err := dsl.Execute(req.Protopass, req.Query, req.CtxKey, req.CtxValues)
+	// Create context with timeout of 60 seconds
+	ctx, cancel := context.WithTimeout(context.Background(), 60*time.Second)
+	defer cancel()
+
+	result, err := dsl.Execute(ctx, req.Protopass, req.Query, req.CtxKey, req.CtxValues)
 
 	response := map[string]interface{}{
 		"data":  result,

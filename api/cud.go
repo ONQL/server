@@ -1,8 +1,10 @@
 package api
 
 import (
+	"context"
 	"encoding/json"
 	"onql/dsl"
+	"time"
 )
 
 type insertData struct {
@@ -57,7 +59,9 @@ func HandleUpdate(payload string) map[string]string {
 
 	// If query is provided, execute it to get primary keys
 	if updData.Query != "" {
-		result, err := dsl.Execute(updData.Protopass, updData.Query, "", []string{})
+		ctx, cancel := context.WithTimeout(context.Background(), 60*time.Second)
+		defer cancel()
+		result, err := dsl.Execute(ctx, updData.Protopass, updData.Query, "", []string{})
 		if err != nil {
 			return map[string]string{"error": err.Error(), "data": ""}
 		}
@@ -108,7 +112,9 @@ func HandleDelete(payload string) map[string]string {
 
 	// If query is provided, execute it to get primary keys
 	if delData.Query != "" {
-		result, err := dsl.Execute(delData.Protopass, delData.Query, "", []string{})
+		ctx, cancel := context.WithTimeout(context.Background(), 60*time.Second)
+		defer cancel()
+		result, err := dsl.Execute(ctx, delData.Protopass, delData.Query, "", []string{})
 		if err != nil {
 			return map[string]string{"error": err.Error(), "data": ""}
 		}

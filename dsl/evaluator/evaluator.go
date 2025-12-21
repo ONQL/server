@@ -8,6 +8,13 @@ import (
 
 func (e *Evaluator) Eval() error {
 	for {
+		// Check for timeout/cancellation
+		select {
+		case <-e.Ctx.Done():
+			return e.Ctx.Err()
+		default:
+		}
+
 		stmt := e.Plan.NextStatement(false)
 		if stmt == nil {
 			break
