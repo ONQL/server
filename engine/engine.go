@@ -42,6 +42,8 @@ For more details see: https://mariadb.com/bsl11/
 package engine
 
 import (
+	"errors"
+	"onql/common"
 	"time"
 
 	badger "github.com/dgraph-io/badger/v3"
@@ -92,6 +94,9 @@ func (db *DB) Get(key []byte) ([]byte, error) {
 		valCopy, err = item.ValueCopy(nil)
 		return err
 	})
+	if errors.Is(err, badger.ErrKeyNotFound) {
+		return nil, common.ErrNotFound
+	}
 	return valCopy, err
 }
 
