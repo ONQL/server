@@ -76,9 +76,12 @@ func Execute(ctx context.Context, protoPass string, query string, ctxKey string,
 	default:
 	}
 
-	lexer := parser.NewLexer(query)
+	lexer, err := parser.NewLexer(query)
+	if err != nil {
+		return nil, err
+	}
 	plan := parser.NewPlan(lexer, protoPass)
-	if err = plan.Parse(); err != nil {
+	if err := plan.Parse(); err != nil {
 		return nil, err
 	}
 

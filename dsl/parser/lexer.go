@@ -434,8 +434,12 @@ func init() {
 }
 
 // NewLexer tokenizes the input string into a simple slice-backed stream.
-func NewLexer(query string) *Lexer {
-	scanner, _ := LexMach.Scanner([]byte(query))
+// NewLexer tokenizes the input string into a simple slice-backed stream.
+func NewLexer(query string) (*Lexer, error) {
+	scanner, err := LexMach.Scanner([]byte(query))
+	if err != nil {
+		return nil, err
+	}
 	tokens := []Token{}
 	i := 0
 	for {
@@ -444,7 +448,7 @@ func NewLexer(query string) *Lexer {
 			break
 		}
 		if err != nil {
-			panic(err)
+			return nil, err
 		}
 		if tok == nil {
 			continue // whitespace or skipped
@@ -454,7 +458,7 @@ func NewLexer(query string) *Lexer {
 		tokens = append(tokens, token)
 		i++
 	}
-	return &Lexer{tokens: tokens, pos: 0}
+	return &Lexer{tokens: tokens, pos: 0}, nil
 }
 
 // Next returns the current token; if advance is true, it moves to the next.

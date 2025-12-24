@@ -1,7 +1,6 @@
 package parser
 
 import (
-	"errors"
 	"fmt"
 )
 
@@ -76,7 +75,7 @@ func (plan *Plan) ParseStatement() error {
 		}
 		return nil
 	} else {
-		return errors.New("Unexpected token: " + token.Value)
+		return fmt.Errorf("unexpected token '%s' at position %d", token.Value, token.Pos)
 	}
 
 	name, err := NumberToColumn(len(plan.Statements) + 1)

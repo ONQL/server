@@ -151,3 +151,4 @@ Never acquire in reverse order to prevent deadlocks.
 2. **Online Schema Changes**: Allow some operations without blocking
 3. **Lock Monitoring**: Add metrics for lock wait times
 4. **Graceful Degradation**: Queue operations instead of blocking indefinitely
+

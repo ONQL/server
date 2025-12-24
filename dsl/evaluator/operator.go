@@ -24,7 +24,7 @@ func (e *Evaluator) EvalOperator() error {
 	case "and", "or", "not":
 		return e.EvalLogicalOperator()
 	default:
-		return errors.New("unknown operator")
+		return fmt.Errorf("unknown operator '%s'", expression[1])
 	}
 }
 
@@ -50,7 +50,7 @@ func (e *Evaluator) EvalArithmeticOperator() error {
 		case "NUMBER", "TIMESTAMP":
 			op1Num = leftStmtData.(float64)
 		default:
-			return errors.New("invalid data type on left operand")
+			return fmt.Errorf("invalid data type '%s' on left operand, expected 'NUMBER' or 'TIMESTAMP'", strings.ToUpper(e.Memory[e.Plan.StatementMap[expression[0]].Name+"_meta_type"].(string)))
 		}
 	} else {
 		switch strings.ToUpper(stmt.Meta["left_type"]) {
@@ -63,7 +63,7 @@ func (e *Evaluator) EvalArithmeticOperator() error {
 				return err
 			}
 		default:
-			return errors.New("invalid data type on left operand")
+			return fmt.Errorf("invalid data type '%s' on left operand, expected 'NUMBER' or 'TIMESTAMP'", strings.ToUpper(stmt.Meta["left_type"]))
 		}
 	}
 	//set right operand
@@ -76,7 +76,7 @@ func (e *Evaluator) EvalArithmeticOperator() error {
 		case "NUMBER", "TIMESTAMP":
 			op2Num = rightStmtData.(float64)
 		default:
-			return errors.New("invalid data type on right operand")
+			return fmt.Errorf("invalid data type '%s' on right operand, expected 'NUMBER' or 'TIMESTAMP'", strings.ToUpper(e.Memory[e.Plan.StatementMap[expression[2]].Name+"_meta_type"].(string)))
 		}
 	} else {
 		// fmt.Println(stmt.Meta["right_type"])
@@ -90,7 +90,7 @@ func (e *Evaluator) EvalArithmeticOperator() error {
 				return err
 			}
 		default:
-			return errors.New("invalid data type on right operand")
+			return fmt.Errorf("invalid data type '%s' on right operand, expected 'NUMBER' or 'TIMESTAMP'", strings.ToUpper(stmt.Meta["right_type"]))
 		}
 	}
 
@@ -103,7 +103,7 @@ func (e *Evaluator) EvalArithmeticOperator() error {
 			// Handle addition
 			resultStr = op1Str + op2Str
 		default:
-			return errors.New("expect Arithmetic operation on string")
+			return fmt.Errorf("expected '+' operation on string, got '%s'", expression[1])
 		}
 	} else {
 		switch expression[1] {
@@ -126,7 +126,7 @@ func (e *Evaluator) EvalArithmeticOperator() error {
 			// Handle modulus
 			resultNum = math.Mod(op1Num, op2Num)
 		default:
-			return errors.New("expect comparison operation")
+			return fmt.Errorf("expected arithmetic operation, got '%s'", expression[1])
 		}
 	}
 	// fmt.Println(op1Str, op2Str)
@@ -168,7 +168,7 @@ func (e *Evaluator) EvalComparisonOperator() error {
 				e.Memory[stmt.Name] = false
 				return nil
 			}
-			return errors.New("invalid data type on left operand")
+			return fmt.Errorf("invalid data type '%s' on left operand of comparison, expected 'NUMBER' or 'TIMESTAMP'", strings.ToUpper(e.Memory[e.Plan.StatementMap[expression[0]].Name+"_meta_type"].(string)))
 		}
 		operationOn = strings.ToUpper(e.Memory[e.Plan.StatementMap[expression[0]].Name+"_meta_type"].(string))
 	} else {
@@ -182,7 +182,7 @@ func (e *Evaluator) EvalComparisonOperator() error {
 				return err
 			}
 		default:
-			return errors.New("invalid data type on left operand")
+			return fmt.Errorf("invalid data type '%s' on left operand of comparison, expected 'NUMBER' or 'TIMESTAMP'", strings.ToUpper(stmt.Meta["left_type"]))
 		}
 		operationOn = strings.ToUpper(stmt.Meta["left_type"])
 	}
@@ -208,7 +208,7 @@ func (e *Evaluator) EvalComparisonOperator() error {
 				e.Memory[stmt.Name] = false
 				return nil
 			}
-			return errors.New("invalid data type on right operand")
+			return fmt.Errorf("invalid data type '%s' on right operand of comparison, expected 'NUMBER' or 'TIMESTAMP'", strings.ToUpper(e.Memory[e.Plan.StatementMap[expression[2]].Name+"_meta_type"].(string)))
 		}
 	} else {
 		// fmt.Println(stmt.Meta["right_type"])
@@ -224,7 +224,7 @@ func (e *Evaluator) EvalComparisonOperator() error {
 		// case "ARRAY"
 		default:
 
-			return errors.New("invalid data type on right operand")
+			return fmt.Errorf("invalid data type '%s' on right operand of comparison, expected 'NUMBER' or 'TIMESTAMP'", strings.ToUpper(stmt.Meta["right_type"]))
 		}
 	}
 
@@ -258,7 +258,7 @@ func (e *Evaluator) EvalComparisonOperator() error {
 				}
 			}
 		default:
-			return errors.New("expect comparison operation")
+			return fmt.Errorf("expected comparison operation on string, got '%s'", expression[1])
 		}
 	} else {
 		switch expression[1] {
@@ -288,7 +288,7 @@ func (e *Evaluator) EvalComparisonOperator() error {
 				}
 			}
 		default:
-			return errors.New("expect comparison operation")
+			return fmt.Errorf("expected comparison operation on number, got '%s'", expression[1])
 		}
 	}
 	// fmt.Println(op1Str, op2Str)

@@ -121,7 +121,7 @@ func (e *Evaluator) EvalTableWithContext() error {
 	// Implement table evaluation logic here
 	stmt := e.Plan.NextStatement(true)
 	if stmt.Operation != parser.OpAccessTable {
-		return errors.New("expected access table operation")
+		return fmt.Errorf("expected access table operation, got '%s'", stmt.Operation)
 	}
 	// if e.ContextKey == "" {
 	// 	e.Plan.PrevStatement(true) //move back
@@ -145,7 +145,10 @@ func (e *Evaluator) EvalTableWithContext() error {
 		}
 		cntxQuery = strings.Replace(cntxQuery, "$"+strconv.Itoa(i+1), replacement, 1)
 	}
-	lexer := parser.NewLexer(cntxQuery)
+	lexer, err := parser.NewLexer(cntxQuery)
+	if err != nil {
+		return err
+	}
 	plan := parser.NewPlan(lexer, e.Plan.ProtocolPass)
 	err = plan.Parse()
 	if err != nil {
@@ -166,7 +169,7 @@ func (e *Evaluator) EvalTable() error {
 	// Implement table evaluation logic here
 	stmt := e.Plan.NextStatement(true)
 	if stmt.Operation != parser.OpAccessTable {
-		return errors.New("expected access table operation")
+		return fmt.Errorf("expected access table operation, got '%s'", stmt.Operation)
 	}
 	// if next statement is start filteration and have
 	pos := e.Plan.Pos
@@ -194,7 +197,7 @@ func (e *Evaluator) EvalRelatedTable() error {
 	// Implement related table evaluation logic here
 	stmt := e.Plan.NextStatement(true)
 	if stmt.Operation != parser.OpAccessRelatedTable {
-		return errors.New("expected access table operation")
+		return fmt.Errorf("expected access table operation for related table, got '%s'", stmt.Operation)
 	}
 
 	fkKey := strings.Split(stmt.Expressions.(*storemanager.Relation).FKField, ":")[0]
@@ -257,7 +260,7 @@ func (e *Evaluator) EvalTableList() error {
 	// Implement table list evaluation logic here
 	stmt := e.Plan.NextStatement(true)
 	if stmt.Operation != parser.OpAccessList {
-		return errors.New("expected access table list operation")
+		return fmt.Errorf("expected access table list operation, got '%s'", stmt.Operation)
 	}
 	if e.isUnderFilter(stmt.Name) || e.IsUnderProjection(stmt.Name) {
 		e.Plan.PrevStatement(true)
@@ -302,7 +305,7 @@ func (e *Evaluator) EvalTableRow() error {
 	// Implement table row evaluation logic here
 	stmt := e.Plan.NextStatement(true)
 	if stmt.Operation != parser.OpAccessRow {
-		return errors.New("expected access table row operation")
+		return fmt.Errorf("expected access table row operation, got '%s'", stmt.Operation)
 	}
 	sourceName := stmt.Sources[0].SourceValue
 	// row := make(map[string]any)
@@ -335,7 +338,7 @@ func (e *Evaluator) EvalTableField() error {
 	// Implement table field evaluation logic here
 	stmt := e.Plan.NextStatement(true)
 	if stmt.Operation != parser.OpAccessField && (stmt.Operation != parser.OpAccessList || (!e.isUnderFilter(stmt.Name) && !e.IsUnderProjection(stmt.Name))) {
-		return errors.New("expected access table field operation")
+		return fmt.Errorf("expected access table field operation, got '%s'", stmt.Operation)
 	}
 	sourceName := stmt.Sources[0].SourceValue
 
@@ -350,7 +353,7 @@ func (e *Evaluator) EvalLiteral() error {
 	// Implement literal evaluation logic here
 	stmt := e.Plan.NextStatement(true)
 	if stmt.Operation != parser.OpLiteral {
-		return errors.New("expected literal operation")
+		return fmt.Errorf("expected literal operation, got '%s'", stmt.Operation)
 	}
 	if stmt.Meta["type"] == "NUMBER" {
 		num, err := strconv.ParseFloat(stmt.Expressions.(string), 64)
