@@ -37,10 +37,45 @@ func Execute(ctx context.Context, stmt parser.Statement) (any, error) {
 func evalSelect(stmt *parser.SelectStmt) (any, error) {
 	// Strategy: Stop-gap In-Memory Join
 	// 1. Fetch data from base table
+	// 1. Fetch data from base table
 	basePks, err := database.GetAllPks(stmt.DB, stmt.Table)
 	if err != nil {
 		return nil, err
 	}
+
+	if len(basePks) == 0 {
+		// Debugging: Check if DB/Table exist
+		dbs := database.FetchDatabases()
+		dbExists := false
+		for _, d := range dbs {
+			if d == stmt.DB {
+				dbExists = true
+				break
+			}
+		}
+		if !dbExists {
+			return nil, fmt.Errorf("database '%s' does not exist. Available: %v", stmt.DB, dbs)
+		}
+
+		tables, err := database.FetchTables(stmt.DB)
+		if err != nil {
+			return nil, fmt.Errorf("failed to fetch tables for db '%s': %v", stmt.DB, err)
+		}
+		tableExists := false
+		for _, t := range tables {
+			if t == stmt.Table {
+				tableExists = true
+				break
+			}
+		}
+		if !tableExists {
+			return nil, fmt.Errorf("table '%s' does not exist in db '%s'. Available: %v", stmt.Table, stmt.DB, tables)
+		}
+
+		// If both exist, then table is just empty
+		return []map[string]interface{}{}, nil
+	}
+
 	baseData, err := database.GetWithPKs(stmt.DB, stmt.Table, basePks)
 	if err != nil {
 		return nil, err
