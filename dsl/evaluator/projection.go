@@ -20,10 +20,19 @@ func (e *Evaluator) EvalProjection() error {
 	//handle unwanted datatypes
 	// _,ok := e.Memory[pStmt.Sources[0].SourceValue].([]map[string]any)
 	// Continue with projection logic
-	tableData, ok := e.Memory[pStmt.Sources[0].SourceValue].([]map[string]any)
-	if !ok {
-		return errors.New("expect table data in projection but got " + fmt.Sprintf("%T", e.Memory[pStmt.Sources[0].SourceValue]))
+
+	// Handle potentially empty slice from previous operations
+	var tableData []map[string]any
+	sourceValue := e.Memory[pStmt.Sources[0].SourceValue]
+
+	if val, ok := sourceValue.([]map[string]any); ok {
+		tableData = val
+	} else if val, ok := sourceValue.([]any); ok && len(val) == 0 {
+		tableData = make([]map[string]any, 0)
+	} else {
+		return errors.New("expect table data in projection but got " + fmt.Sprintf("%T", sourceValue))
 	}
+	
 	if len(tableData) == 0 {
 		nested := 0
 		for {

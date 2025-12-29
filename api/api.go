@@ -39,8 +39,6 @@ func HandleRequest(msg *Message) string {
 		return HandleDeleteRequest(msg)
 	case "stats":
 		return handleStatsRequest(msg)
-	case "sql":
-		return handleSQLRequest(msg)
 	default:
 		return errorResponse("unknown target: " + msg.Target)
 	}
