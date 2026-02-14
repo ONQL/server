@@ -17,6 +17,9 @@ A high-performance, embedded **message-based RDBMS** written in Go, powered by [
 *   **Protocol System**: Maps entity aliases to actual DB/table names with relationships
 *   **DSL Query Engine**: SQL-like query language with filters, projections, and aggregations
 
+### Query Cache
+*   **Hot Read Caching**: Optional TTL-based LRU cache for frequently executed DSL queries. Configure `CACHE_MAX_MB` (>0) to enable and `CACHE_TTL` to control freshness. Writes automatically invalidate the cache to keep results consistent.
+
 ## 🏗 Architecture
 
 ```
@@ -206,6 +209,8 @@ Environment variables:
 *   `DB_PATH`: Data storage path (default: `./store`)
 *   `FLUSH_INTERVAL`: Buffer flush interval (default: `500ms`)
 *   `LOG_LEVEL`: `DEBUG|INFO|WARN|ERROR` (default: `INFO`)
+*   `CACHE_MAX_MB`: Memory budget for the DSL query cache (default: `0`, disabled)
+*   `CACHE_TTL`: Go duration for cached payload freshness (default: `60s`)
 
 ## 📁 Project Structure
 

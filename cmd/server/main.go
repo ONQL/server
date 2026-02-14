@@ -25,6 +25,7 @@ func main() {
 
 	// 3. Set Global DB for API
 	api.SetDatabase(db)
+	api.ConfigureQueryCache(cfg.CacheMaxBytes, cfg.CacheTTL)
 
 	// 4. Setup Graceful Shutdown
 	c := make(chan os.Signal, 1)

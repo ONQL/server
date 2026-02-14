@@ -44,6 +44,7 @@ func HandleInsert(payload string) map[string]string {
 		return map[string]string{"error": err.Error(), "data": ""}
 	}
 
+	invalidateQueryCache()
 	return map[string]string{"error": "", "data": id}
 }
 
@@ -97,6 +98,7 @@ func HandleUpdate(payload string) map[string]string {
 		return map[string]string{"error": payloadError, "data": ""}
 	}
 
+	invalidateQueryCache()
 	return map[string]string{"error": "", "data": "success"}
 }
 
@@ -145,6 +147,7 @@ func HandleDelete(payload string) map[string]string {
 		}
 	}
 
+	invalidateQueryCache()
 	return map[string]string{"error": "", "data": "success"}
 }
 

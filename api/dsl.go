@@ -22,6 +22,10 @@ func handleDSLRequest(msg *Message) string {
 		return errorResponse(fmt.Sprintf("invalid payload: %v", err))
 	}
 
+	if cached, ok := getCachedResponse(&req); ok {
+		return cached
+	}
+
 	// Create context with timeout of 60 seconds
 	ctx, cancel := context.WithTimeout(context.Background(), 60*time.Second)
 	defer cancel()
@@ -38,5 +42,11 @@ func handleDSLRequest(msg *Message) string {
 	}
 
 	data, _ := json.Marshal(response)
-	return string(data)
+	payload := string(data)
+
+	if err == nil {
+		storeCachedResponse(&req, payload)
+	}
+
+	return payload
 }
