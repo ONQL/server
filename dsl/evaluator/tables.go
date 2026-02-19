@@ -125,7 +125,11 @@ func (e *Evaluator) EvalTable() error {
 	sortCol := stmt.Meta["sort_col"]
 	sortDir := stmt.Meta["sort_dir"]
 
-	if filters != nil {
+	if filters != nil && sortCol != "" {
+		// Filter + Sort
+		reverse := sortDir == "_desc"
+		data, err = GetTableDataSortedAndFiltered(stmt.Meta["db"], stmt.Meta["table"], sortCol, filters, offset, limit, reverse)
+	} else if filters != nil {
 		data, err = GetTableWithDataWithFilters(stmt.Meta["db"], stmt.Meta["table"], filters, offset, limit)
 	} else if sortCol != "" {
 		// Sorted retrieval via Index

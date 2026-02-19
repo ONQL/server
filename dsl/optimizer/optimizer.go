@@ -39,8 +39,14 @@ func (opt *Optimizer) Optimize() error {
 						skipIndices[i+1] = true
 					}
 				} else if nextStmt.Operation == parser.OpStartFilter {
+					// Check for Filter -> Slice
 					if skipped := opt.OptimizeFilterSlice(stmts, i); skipped > 0 {
 						skipIndices[i+skipped] = true
+					} else if skippedIndices := opt.OptimizeFilterSortSlice(stmts, i); len(skippedIndices) > 0 {
+						// Check for Filter -> Sort -> Slice
+						for _, idx := range skippedIndices {
+							skipIndices[i+idx] = true
+						}
 					}
 				} else if nextStmt.Operation == parser.OpAggregateReduce {
 					if skipped := opt.OptimizeSortSlice(stmts, i); skipped > 0 {
@@ -59,11 +65,6 @@ func (opt *Optimizer) Optimize() error {
 }
 
 // OptimizeSlice handles the pattern: AccessTable -> Slice
-// This optimization merges the Slice operation into the AccessTable operation
-// by pushing down the offset and limit.
-//
-// Pattern: TABLE[Start:End]
-// Action:  Set TABLE.Meta["offset"] = Start, TABLE.Meta["limit"] = End-Start
 // Returns: true if optimization was applied
 func (opt *Optimizer) OptimizeSlice(stmt *parser.Statement, sliceStmt *parser.Statement) bool {
 	offset, limit, ok := parseSliceExpression(sliceStmt.Expressions)
@@ -75,13 +76,7 @@ func (opt *Optimizer) OptimizeSlice(stmt *parser.Statement, sliceStmt *parser.St
 }
 
 // OptimizeFilterSlice handles the pattern: AccessTable -> Filter -> Slice
-// This optimization allows pushing down the Limit/Offset to the Table Access even when filtered.
-// NOTE: This assumes the storage engine/evaluator can handle "limit matching items",
-// i.e., it scans until it finds 'Limit' items that satisfy the filter.
-//
-// Pattern: TABLE[Filter][Start:End]
-// Action:  Set TABLE.Meta["offset"] = Start, TABLE.Meta["limit"] = End-Start
-// Returns: index of the Slice statement relative to AccessTable (to be skipped), or 0 if failed.
+// Returns: relative index of Slice statement to skip (0 if failed)
 func (opt *Optimizer) OptimizeFilterSlice(stmts []*parser.Statement, index int) int {
 	nesting := 0
 	endFilterIdx := -1
@@ -112,28 +107,17 @@ func (opt *Optimizer) OptimizeFilterSlice(stmts []*parser.Statement, index int) 
 }
 
 // OptimizeSortSlice handles the pattern: AccessTable -> Sort -> Slice
-// This optimization utilizes the database index to retrieve data in sorted order,
-// avoiding loading all data into memory for sorting.
-//
-// Pattern: TABLE._desc(Col)[Start:End]
-// Action:  Set TABLE.Meta["sort_col"] = Col, TABLE.Meta["sort_dir"] = _desc
-//
-//	Set TABLE.Meta["offset"] = Start, TABLE.Meta["limit"] = End-Start
-//
-// Returns: number of statements to skip (Scan + Sort + Slice = skip 2 next stmts)
+// Returns: number of statements to skip (2 statements: Sort + Slice)
 func (opt *Optimizer) OptimizeSortSlice(stmts []*parser.Statement, index int) int {
-	// check if next is Sort
 	sortStmt := stmts[index+1]
 	aggr, ok := sortStmt.Expressions.(parser.Aggr)
 	if ok && (aggr.Name == "_asc" || aggr.Name == "_desc") {
-		// Found Sort operation
 		if index+2 < len(stmts) {
 			sliceStmt := stmts[index+2]
 			if sliceStmt.Operation == parser.OpSlice {
 				stmt := stmts[index]
 				offset, limit, okSlice := parseSliceExpression(sliceStmt.Expressions)
 				if okSlice {
-					// Apply Sort and Slice optimization
 					if stmt.Meta == nil {
 						stmt.Meta = make(map[string]string)
 					}
@@ -149,23 +133,71 @@ func (opt *Optimizer) OptimizeSortSlice(stmts []*parser.Statement, index int) in
 	return 0
 }
 
+// OptimizeFilterSortSlice handles the pattern: AccessTable -> Filter -> Sort -> Slice
+// Returns: list of relative indices to skip (Sort + Slice)
+func (opt *Optimizer) OptimizeFilterSortSlice(stmts []*parser.Statement, index int) []int {
+	nesting := 0
+	endFilterIdx := -1
+	for j := index + 1; j < len(stmts); j++ {
+		if stmts[j].Operation == parser.OpStartFilter {
+			nesting++
+		} else if stmts[j].Operation == parser.OpEndFilter {
+			nesting--
+			if nesting == 0 {
+				endFilterIdx = j
+				break
+			}
+		}
+	}
+
+	if endFilterIdx != -1 && endFilterIdx+1 < len(stmts) {
+		// Check for Sort after Filter
+		sortStmt := stmts[endFilterIdx+1]
+		if sortStmt.Operation == parser.OpAggregateReduce {
+			aggr, ok := sortStmt.Expressions.(parser.Aggr)
+			if ok && (aggr.Name == "_asc" || aggr.Name == "_desc") {
+				// Check for Slice after Sort
+				if endFilterIdx+2 < len(stmts) {
+					sliceStmt := stmts[endFilterIdx+2]
+					if sliceStmt.Operation == parser.OpSlice {
+						stmt := stmts[index]
+						offset, limit, okSlice := parseSliceExpression(sliceStmt.Expressions)
+						if okSlice {
+							// Apply Optimization
+							if stmt.Meta == nil {
+								stmt.Meta = make(map[string]string)
+							}
+							stmt.Meta["sort_col"] = aggr.Args[0]
+							stmt.Meta["sort_dir"] = aggr.Name
+							applyOptimization(stmt, offset, limit)
+
+							// Return indices of Sort and Slice
+							// Sort is at endFilterIdx+1 -> rel: endFilterIdx + 1 - index
+							// Slice is at endFilterIdx+2 -> rel: endFilterIdx + 2 - index
+							sortRelIdx := endFilterIdx + 1 - index
+							sliceRelIdx := endFilterIdx + 2 - index
+							return []int{sortRelIdx, sliceRelIdx}
+						}
+					}
+				}
+			}
+		}
+	}
+	return nil
+}
+
 func parseSliceExpression(expr any) (offset int64, limit int64, ok bool) {
 	sliceStr, isStr := expr.(string)
 	if !isStr {
-		// Try generic slice of expressions if parser changes back
 		if exprs, okList := expr.([]parser.Expression); okList && len(exprs) >= 2 {
-			// Legacy support or if parser assumption was right initially
-			// ... skipping for now as string seems to be the one
 			fmt.Printf("Optimizer: Expressions type mismatch. Got %T\n", expr)
 			return 0, 0, false
 		}
-		// fmt.Printf("Optimizer: Expressions type mismatch. Got %T\n", expr)
 		return 0, 0, false
 	}
 
 	parts := strings.Split(sliceStr, ":")
 	if len(parts) >= 1 {
-		// Parse Start (Offset)
 		if parts[0] != "" {
 			var err error
 			offset, err = strconv.ParseInt(strings.TrimSpace(parts[0]), 10, 64)
@@ -173,19 +205,17 @@ func parseSliceExpression(expr any) (offset int64, limit int64, ok bool) {
 				return 0, 0, false
 			}
 		} else {
-			offset = 0 // Default start
+			offset = 0
 		}
 
 		ok = true
 
-		// Parse End (Limit)
 		if len(parts) >= 2 && parts[1] != "" {
 			end, err := strconv.ParseInt(strings.TrimSpace(parts[1]), 10, 64)
 			if err == nil {
 				if end > offset {
 					limit = end - offset
 				} else {
-					// Invalid range
 					limit = 0
 					ok = false
 				}
@@ -193,7 +223,7 @@ func parseSliceExpression(expr any) (offset int64, limit int64, ok bool) {
 				ok = false
 			}
 		} else {
-			limit = 0 // Meaning all
+			limit = 0
 		}
 	} else {
 		ok = false

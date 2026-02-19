@@ -592,8 +592,13 @@ func (sm *StoreManager) GetTableSchema(dbName, tableName string) (string, *Table
 }
 
 // GetPksSortedByCol retrieves PKs sorted by a column using the index.
-// It iterates the index prefix IDX:db:table:col: and returns PKs.
+// It is now a wrapper around GetPksSortedByColWithFilter with nil filters.
 func (sm *StoreManager) GetPksSortedByCol(dbName, tableName, colName string, offset, limit int, reverse bool) ([]string, error) {
+	return sm.GetPksSortedByColWithFilter(dbName, tableName, colName, offset, limit, reverse, nil)
+}
+
+// GetPksSortedByColWithFilter retrieves PKs sorted by a column using the index, checking filters for each candidate.
+func (sm *StoreManager) GetPksSortedByColWithFilter(dbName, tableName, colName string, offset, limit int, reverse bool, filters []string) ([]string, error) {
 	dbID, table, err := sm.GetTableSchema(dbName, tableName)
 	if err != nil {
 		return nil, err
@@ -604,7 +609,6 @@ func (sm *StoreManager) GetPksSortedByCol(dbName, tableName, colName string, off
 		return nil, fmt.Errorf("column %s not found", colName)
 	}
 
-	// Index Prefix: IDX:dbID:tableID:colID:
 	prefix := fmt.Sprintf("IDX:%s:%s:%s:", dbID, table.ID, colDef.ID)
 	prefixBytes := []byte(prefix)
 
@@ -627,9 +631,6 @@ func (sm *StoreManager) GetPksSortedByCol(dbName, tableName, colName string, off
 	sm.buffer.mu.RUnlock()
 
 	// 2. Disk Handling
-	// We iterate everything matching prefix.
-	// Optimally we would use IteratePrefixWithLimit if we knew buffer was empty,
-	// but for correctness with mixed Buffer/Disk, we scan all index entries.
 	err = sm.engine.IteratePrefix(prefixBytes, func(k, v []byte) error {
 		keyStr := string(k)
 		if _, ok := seen[keyStr]; !ok {
@@ -643,39 +644,109 @@ func (sm *StoreManager) GetPksSortedByCol(dbName, tableName, colName string, off
 
 	// 3. Sort Keys
 	// Index Key: IDX:db:table:col:value:pk
-	// Sorting keys sorts by Value first (since value is before PK in key structure).
 	if reverse {
 		sort.Sort(sort.Reverse(sort.StringSlice(validKeys)))
 	} else {
 		sort.Strings(validKeys)
 	}
 
-	// 4. Apply Offset/Limit to Keys
-	if offset >= len(validKeys) {
-		return []string{}, nil
-	}
-	end := offset + limit
-	if limit == 0 || end > len(validKeys) {
-		end = len(validKeys)
-	}
-	slicedKeys := validKeys[offset:end]
+	// 4. Iterate Sorted Keys, Fetch Row, Check Filter
+	matchedPKs := make([]string, 0)
+	skipped := 0
 
-	// 5. Extract PKs
-	resultPKs := make([]string, 0, len(slicedKeys))
-	for _, key := range slicedKeys {
-		// Value of Index Entry?
-		// Insert puts PK as Value.
-		// Check buffer first
+	// We iterate ALL valid keys until we find limit matches.
+	for _, key := range validKeys {
+		if limit > 0 && len(matchedPKs) >= limit {
+			break
+		}
+
+		// Get PK
+		var pk string
+		// Check buffer first (for value)
 		if val, exists, _ := sm.buffer.Get(key); exists {
-			resultPKs = append(resultPKs, string(val))
+			pk = string(val)
 		} else {
 			// Check disk
 			val, err := sm.engine.Get([]byte(key))
 			if err == nil {
-				resultPKs = append(resultPKs, string(val))
+				pk = string(val)
+			} else {
+				continue // Should skip if error
+			}
+		}
+
+		// Fetch Row Data to check Filter
+		row, err := sm.Get(dbName, tableName, pk)
+		if err != nil {
+			continue
+		}
+
+		// Check Filter
+		if matchRPNFilters(row.Data, filters) {
+			if skipped < offset {
+				skipped++
+			} else {
+				matchedPKs = append(matchedPKs, pk)
 			}
 		}
 	}
 
-	return resultPKs, nil
+	return matchedPKs, nil
+}
+
+func matchRPNFilters(row map[string]interface{}, filters []string) bool {
+	// Simple RPN evaluation for AND/OR/Equals
+	// Stack stores boolean results of conditions
+	// filters: ["col:val", "col:val", "and"]
+
+	stack := make([]bool, 0)
+
+	for _, tok := range filters {
+		tokLower := strings.ToLower(tok)
+		if tokLower == "and" {
+			if len(stack) < 2 {
+				return false
+			}
+			v2 := stack[len(stack)-1]
+			v1 := stack[len(stack)-2]
+			stack = stack[:len(stack)-2]
+			stack = append(stack, v1 && v2)
+		} else if tokLower == "or" {
+			if len(stack) < 2 {
+				return false
+			}
+			v2 := stack[len(stack)-1]
+			v1 := stack[len(stack)-2]
+			stack = stack[:len(stack)-2]
+			stack = append(stack, v1 || v2)
+		} else {
+			// "col:val"
+			parts := strings.SplitN(tok, ":", 2)
+			if len(parts) != 2 {
+				return false
+			}
+			col := strings.TrimSpace(parts[0])
+			val := strings.TrimSpace(parts[1])
+
+			// Check row[col] == val
+			// Handle types loosely (fmt.Sprintf)
+			rowVal, ok := row[col]
+			if !ok {
+				stack = append(stack, false)
+				continue
+			}
+			rowValStr := fmt.Sprintf("%v", rowVal)
+
+			// Remove quotes from val if present
+			valClean := val
+			// Assuming val is already clean from parser? Yes, ParseFilters cleans quotes.
+
+			stack = append(stack, rowValStr == valClean)
+		}
+	}
+
+	if len(stack) != 1 {
+		return false
+	}
+	return stack[0]
 }

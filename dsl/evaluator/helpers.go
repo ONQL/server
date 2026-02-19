@@ -20,6 +20,49 @@ func GetTableData(db string, table string, offset, limit int) ([]map[string]any,
 	return data, nil
 }
 
+func GetTableDataSortedAndFiltered(db, table, sortCol string, filters []string, offset, limit int, reverse bool) ([]map[string]any, error) {
+	// Use Smart Index Scan: Iterate Index(SortCol) and check filters.
+	// For now, let's implement validation logic in Evaluator or Database.
+	// We need `database.GetPksSortedByColWithFilter`?
+	// Or we reuse `GetPksSortedByCol` and filter here?
+	// If we filter here, we must fetch ALL sorted PKs then filter. That's slow if many rows.
+	// BUT, `GetPksSortedByCol` takes Limit!
+	// If we push limit to `GetPksSortedByCol`, it will return ONLY 'limit' items.
+	// But those items might NOT satisfy the filter!
+	// So we can't use `GetPksSortedByCol` with limit if we have filters.
+	// We need a function that iterates index until it finds 'limit' items THAT MATCH THE FILTER.
+
+	// Since we can't easily push arbitrary complex filters to storage layer yet (without implementing filter engine there),
+	// we have two options:
+	// 1. Iterate Index (Scan All Sorted IDs), Fetch Data, Check Filter. Stop when limit reached.
+	// 2. Fetch All Filtered IDs (using Set Intersection), Then Sort in Memory, Then Slice.
+
+	// Option 2 is current behavior (slow for large result sets).
+	// Option 1 is "Index Scan".
+	// Which is better?
+	// If Filter is highly selective (returns few rows), Option 2 is better.
+	// If Filter is loose (many rows) and we only want top 10, Option 1 is better.
+	// The user query `chart_history[instrument_id="xyz"]` is likely highly selective?
+	// But if `instrument_id` has 1M rows, and we want top 10 by time.
+	// `instrument_id` index gives 1M PKs. Sorting 1M PKs is slow.
+	// `time` index gives 10M PKs. Scanning `time` index:
+	//   Check 1st row: is intrument_id="xyz"? No.
+	//   Check 2nd row: ...
+	//   This requires fetching Data (or checking another index) for each row in Sort Order.
+
+	// If we have an index on `instrument_id`, we can use it to validate quickly?
+	// "Check if PK exists in `IDX:instrument_id:xyz`"
+
+	// Let's implement the "Smart Index Scan" method in `database` package.
+	// `database.GetPksSortedByColWithFilter`
+
+	pks, err := database.GetPksSortedByColWithFilter(db, table, sortCol, offset, limit, reverse, filters)
+	if err != nil {
+		return nil, err
+	}
+	return database.GetWithPKs(db, table, pks)
+}
+
 func GetTableDataSorted(db, table, col string, offset, limit int, reverse bool) ([]map[string]any, error) {
 	pks, err := database.GetPksSortedByCol(db, table, col, offset, limit, reverse)
 	if err != nil {

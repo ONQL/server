@@ -55,6 +55,29 @@ func (m *MockEngine) IteratePrefix(prefix []byte, fn func(k, v []byte) error) er
 	return nil
 }
 
+func (m *MockEngine) IteratePrefixWithLimit(prefix []byte, offset, limit int, reverse bool, fn func(k, v []byte) error) error {
+	count := 0
+	skipped := 0
+
+	// Note: Iteration order in map is random, so this mock is limited for order tests.
+	for k, v := range m.data {
+		if strings.HasPrefix(k, string(prefix)) {
+			if skipped < offset {
+				skipped++
+				continue
+			}
+			if limit > 0 && count >= limit {
+				break
+			}
+			if err := fn([]byte(k), v); err != nil {
+				return err
+			}
+			count++
+		}
+	}
+	return nil
+}
+
 func TestSchemaRefactoring(t *testing.T) {
 	engine := NewMockEngine()
 	cfg := &config.Config{FlushInterval: 100 * time.Millisecond}

@@ -116,3 +116,11 @@ func GetPksSortedByCol(dbName, tableName, colName string, offset, limit int, rev
 	}
 	return globalDB.sm.GetPksSortedByCol(dbName, tableName, colName, offset, limit, reverse)
 }
+
+// GetPksSortedByColWithFilter retrieves sorted PKs that also satisfy the given filters.
+func GetPksSortedByColWithFilter(dbName, tableName, colName string, offset, limit int, reverse bool, filters []string) ([]string, error) {
+	if globalDB == nil {
+		panic("global DB not initialized")
+	}
+	return globalDB.sm.GetPksSortedByColWithFilter(dbName, tableName, colName, offset, limit, reverse, filters)
+}

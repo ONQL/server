@@ -51,6 +51,10 @@ import (
 // It initializes the schema, buffer, and starts the background flush routine.
 // It also loads the existing schema and protocols from the engine.
 func New(eng Engine, cfg *config.Config) *StoreManager {
+	if cfg.FlushInterval <= 0 {
+		cfg.FlushInterval = 500 * time.Millisecond
+	}
+
 	sm := &StoreManager{
 		engine: eng,
 		schema: &Schema{

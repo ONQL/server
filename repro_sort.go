@@ -14,7 +14,7 @@ import (
 func main() {
 	// Setup generic config
 	cfg := &config.Config{
-		DBPath:        "./test_db",
+		DBPath:        "./test_db_sort",
 		LogLevel:      "info",
 		FlushInterval: 5 * time.Second,
 	}
@@ -27,7 +27,7 @@ func main() {
 	}
 	defer db.Close()
 
-	// 1. Setup Data via Go API
+	// 1. Setup Data
 	dbName := "testdb"
 	tableName := "users"
 
@@ -42,13 +42,11 @@ func main() {
 		Columns: map[string]*storemanager.Column{
 			"id":   {ID: "id", Name: "id", Type: storemanager.TypeString, Indexed: true},
 			"name": {ID: "name", Name: "name", Type: storemanager.TypeString, Indexed: true},
-			"age":  {ID: "age", Name: "age", Type: storemanager.TypeNumber},
+			"age":  {ID: "age", Name: "age", Type: storemanager.TypeNumber, Indexed: true},
 		},
 	})
-	if err != nil {
-	}
 
-	// Insert Data
+	// Insert Data (Unsorted ID, Unsorted Age)
 	users := []map[string]interface{}{
 		{"id": "1", "name": "Alice", "age": 30},
 		{"id": "2", "name": "Bob", "age": 25},
@@ -56,19 +54,34 @@ func main() {
 		{"id": "4", "name": "Dave", "age": 40},
 		{"id": "5", "name": "Eve", "age": 22},
 	}
-
 	for _, u := range users {
-		_, err := database.Insert(dbName, tableName, u)
-		if err != nil {
-		}
+		database.Insert(dbName, tableName, u)
 	}
 
-	// 2. Query via DSL with _desc
-	query := `testdb.users._desc(name)[0:2]`
+	// Setup Protocol
+	protocol := storemanager.QueryProtocol{
+		dbName: &storemanager.ProtocolModule{
+			Database: dbName,
+			Entities: map[string]*storemanager.Entity{
+				tableName: {
+					Table: tableName,
+					Fields: map[string]string{
+						"id":   "id",
+						"name": "name",
+						"age":  "age",
+					},
+				},
+			},
+		},
+	}
+	db.SetProtocol("default", protocol)
 
+	// 2. Query: Sort by Age (Desc) + Slice [0:2]
+	// Expect: Dave(40), Charlie(35)
+	query := `testdb.users._desc(age)[0:2]`
 	fmt.Println("Running Query:", query)
+
 	ctx := context.Background()
-	// Pass "default" protocol pass
 	res, err := dsl.Execute(ctx, "default", query, "", nil)
 	if err != nil {
 		fmt.Printf("Execution Error: %v\n", err)
