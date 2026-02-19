@@ -142,6 +142,52 @@ func (db *DB) IteratePrefix(prefix []byte, fn func(k, v []byte) error) error {
 	})
 }
 
+// IteratePrefixWithLimit iterates over keys with a prefix, applying an offset and a limit.
+// It skips 'offset' items and then processes up to 'limit' items.
+// If limit <= 0, it behaves like a normal complete iteration (after offset).
+func (db *DB) IteratePrefixWithLimit(prefix []byte, offset, limit int, reverse bool, fn func(k, v []byte) error) error {
+	return db.badgerDB.View(func(txn *badger.Txn) error {
+		opts := badger.DefaultIteratorOptions
+		opts.Reverse = reverse
+		it := txn.NewIterator(opts)
+		defer it.Close()
+
+		skipped := 0
+		count := 0
+
+		var seekKey []byte
+		if reverse {
+			// For reverse iteration, we want to start at the end of the prefix.
+			// Appending 0xFF to the prefix ensures we start after the last possible key with that prefix.
+			seekKey = append(prefix, 0xFF)
+		} else {
+			seekKey = prefix
+		}
+
+		for it.Seek(seekKey); it.ValidForPrefix(prefix); it.Next() {
+			if skipped < offset {
+				skipped++
+				continue
+			}
+
+			if limit > 0 && count >= limit {
+				break
+			}
+
+			item := it.Item()
+			k := item.Key()
+			err := item.Value(func(v []byte) error {
+				return fn(k, v)
+			})
+			if err != nil {
+				return err
+			}
+			count++
+		}
+		return nil
+	})
+}
+
 // RunGC runs value log garbage collection periodically.
 // It runs every 5 minutes and attempts to reclaim space if the value log
 // has at least 0.7 discard ratio.

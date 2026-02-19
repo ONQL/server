@@ -5,6 +5,7 @@ import (
 	"errors"
 	"fmt"
 	"onql/dsl/evaluator"
+	"onql/dsl/optimizer"
 	"onql/dsl/parser"
 	"runtime/debug"
 	"strings"
@@ -86,6 +87,12 @@ func Execute(ctx context.Context, protoPass string, query string, ctxKey string,
 	}
 
 	// Pass context to evaluator
+	// Optimize Plan
+	opt := optimizer.NewOptimizer(plan)
+	if err := opt.Optimize(); err != nil {
+		return nil, err
+	}
+
 	ev := evaluator.NewEvaluator(ctx, plan, ctxKey, ctxValues)
 	if err = ev.Eval(); err != nil {
 		return nil, err

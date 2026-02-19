@@ -158,4 +158,5 @@ type Engine interface {
 	Delete(key []byte) error
 	BatchSet(keys, values [][]byte) error
 	IteratePrefix(prefix []byte, fn func(k, v []byte) error) error
+	IteratePrefixWithLimit(prefix []byte, offset, limit int, reverse bool, fn func(k, v []byte) error) error
 }

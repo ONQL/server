@@ -4,6 +4,7 @@ import (
 	"errors"
 	"fmt"
 	"onql/database"
+	"onql/dsl/optimizer"
 	"onql/dsl/parser"
 	"onql/storemanager"
 	"strconv"
@@ -21,7 +22,7 @@ import (
 // 	filters := make([]string, 0)
 // 	col := [2]string{}
 // 	for {
-
+//
 // 		stmt = e.Plan.NextStatement(true)
 // 		if stmt.Operation == parser.OpEndFilter {
 // 			break
@@ -52,70 +53,6 @@ import (
 // 	}
 // 	return filters
 // }
-
-func (e *Evaluator) GenFilters() []string {
-	stmt := e.Plan.NextStatement(true)
-	if stmt == nil || stmt.Operation != parser.OpStartFilter {
-		return nil
-	}
-
-	filters := make([]string, 0, 8)
-	var colName, colVal string
-
-	flush := func() {
-		if colName == "" || colVal == "" {
-			return
-		}
-		v := strings.TrimSpace(colVal)
-		// strip quotes if present
-		if n := len(v); n >= 2 && ((v[0] == '"' && v[n-1] == '"') || (v[0] == '\'' && v[n-1] == '\'')) {
-			v = v[1 : n-1]
-		}
-		filters = append(filters, colName+":"+v)
-		colName, colVal = "", ""
-	}
-
-	for {
-		stmt = e.Plan.NextStatement(true)
-		if stmt == nil {
-			break
-		}
-		if stmt.Operation == parser.OpEndFilter {
-			flush()
-			break
-		}
-
-		switch stmt.Operation {
-		case parser.OpAccessList:
-			// left side (column)
-			colName = stmt.Meta["name"]
-
-		case parser.OpLiteral:
-			// right side (value) for '='
-			colVal = stmt.Expressions.(string)
-
-		case parser.OpNormalOperation:
-			// expecting one of: "=", "==", "and", "or"
-			op := strings.ToLower(strings.TrimSpace(stmt.Expressions.(string)))
-			switch op {
-			case "=", "==":
-				// do nothing here; we'll flush when literal arrives
-			case "and", "or":
-				flush() // ensure previous expr emitted
-				filters = append(filters, op)
-			default:
-				return nil
-				// ignore anything else (e.g., "!=" not supported)
-			}
-		default:
-			return nil
-		}
-		if colName != "" && colVal != "" {
-			flush()
-		}
-	}
-	return filters
-}
 
 func (e *Evaluator) EvalTableWithContext() error {
 	// Implement table evaluation logic here
@@ -173,14 +110,30 @@ func (e *Evaluator) EvalTable() error {
 	}
 	// if next statement is start filteration and have
 	pos := e.Plan.Pos
-	filters := e.GenFilters()
+	filters := optimizer.ParseFilters(e.Plan)
 	var data []map[string]any
 	var err error
+
+	// Extract sort/limit from Metadata
+	var offset, limit int
+	if oStr, ok := stmt.Meta["offset"]; ok {
+		offset, _ = strconv.Atoi(oStr)
+	}
+	if lStr, ok := stmt.Meta["limit"]; ok {
+		limit, _ = strconv.Atoi(lStr)
+	}
+	sortCol := stmt.Meta["sort_col"]
+	sortDir := stmt.Meta["sort_dir"]
+
 	if filters != nil {
-		data, err = GetTableWithDataWithFilters(stmt.Meta["db"], stmt.Meta["table"], filters)
+		data, err = GetTableWithDataWithFilters(stmt.Meta["db"], stmt.Meta["table"], filters, offset, limit)
+	} else if sortCol != "" {
+		// Sorted retrieval via Index
+		reverse := sortDir == "_desc"
+		data, err = GetTableDataSorted(stmt.Meta["db"], stmt.Meta["table"], sortCol, offset, limit, reverse)
 	} else {
 		// Continue with table evaluation logic
-		data, err = GetTableData(stmt.Meta["db"], stmt.Meta["table"])
+		data, err = GetTableData(stmt.Meta["db"], stmt.Meta["table"], offset, limit)
 	}
 	e.Plan.Pos = pos
 	if err != nil {
@@ -310,9 +263,7 @@ func (e *Evaluator) EvalTableRow() error {
 	sourceName := stmt.Sources[0].SourceValue
 	// row := make(map[string]any)
 	// if e.Plan.StatementMap[stmt.Expressions.(string)].Operation == parser.OpUnknownIdentifier {
-
 	// } else {
-
 	// }
 	switch e.Memory[sourceName].(type) {
 	case []map[string]any:

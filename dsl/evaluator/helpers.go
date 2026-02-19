@@ -7,8 +7,8 @@ import (
 	"strings"
 )
 
-func GetTableData(db string, table string) ([]map[string]any, error) {
-	pks, err := database.GetAllPks(db, table)
+func GetTableData(db string, table string, offset, limit int) ([]map[string]any, error) {
+	pks, err := database.GetAllPksWithLimits(db, table, offset, limit, false) // Default reverse=false for now
 	if err != nil {
 		return nil, err
 	}
@@ -20,42 +20,17 @@ func GetTableData(db string, table string) ([]map[string]any, error) {
 	return data, nil
 }
 
-// func GetTableWithDataWithFilters(db string, table string, filters []string) ([]map[string]any, error) {
-// 	// loop filters and get by col value and at last union of pks then get with pks
-// 	pks := make([]string, 0)
-// 	for i, filter := range filters {
-// 		if filter == "and" || filter == "or" {
-// 			continue
-// 		}
-// 		cols := strings.Split(filter, ":")
-// 		pk, err := get.GetPksFromIndex(db, table, cols[0]+":"+cols[1])
-// 		if err != nil {
-// 			return nil, err
-// 		}
-// 		// check is i and or or
-// 		if i == 0 {
-// 			pks = pk
-// 			continue
-// 		}
-// 		// check if i-1 is and then union of pks then append otherwise direct appent
-// 		if filters[i-1] == "and" {
-// 			// union of pks and pk
-// 			pks = get.Union(pks, pk)
-// 		} else {
-// 			pks = append(pks, pk...)
-// 		}
-// 	}
+func GetTableDataSorted(db, table, col string, offset, limit int, reverse bool) ([]map[string]any, error) {
+	pks, err := database.GetPksSortedByCol(db, table, col, offset, limit, reverse)
+	if err != nil {
+		return nil, err
+	}
+	return database.GetWithPKs(db, table, pks)
+}
 
-// 	data, err := get.GetWithPKs(db, table, pks)
-// 	if err != nil {
-// 		return nil, err
-// 	}
-// 	return data, nil
-// }
-
-func GetTableWithDataWithFilters(db, table string, filters []string) ([]map[string]any, error) {
+func GetTableWithDataWithFilters(db, table string, filters []string, offset, limit int) ([]map[string]any, error) {
 	if len(filters) == 0 {
-		return GetTableData(db, table)
+		return GetTableData(db, table, offset, limit)
 	}
 
 	trim := func(s string) string { return strings.TrimSpace(s) }
@@ -115,6 +90,19 @@ func GetTableWithDataWithFilters(db, table string, filters []string) ([]map[stri
 	}
 
 	pks := dedupe(stack[0])
+
+	// Apply Offset/Limit
+	if offset > 0 {
+		if offset >= len(pks) {
+			pks = []string{}
+		} else {
+			pks = pks[offset:]
+		}
+	}
+	if limit > 0 && len(pks) > limit {
+		pks = pks[:limit]
+	}
+
 	if len(pks) == 0 {
 		return []map[string]any{}, nil
 	}

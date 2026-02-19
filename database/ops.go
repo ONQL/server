@@ -100,3 +100,19 @@ func FetchTables(dbName string) ([]string, error) {
 	}
 	return globalDB.sm.FetchTables(dbName)
 }
+
+// GetAllPksWithLimits wrapper using globalDB
+func GetAllPksWithLimits(dbName, tableName string, offset, limit int, reverse bool) ([]string, error) {
+	if globalDB == nil {
+		panic("global DB not initialized")
+	}
+	return globalDB.sm.GetAllPksWithLimits(dbName, tableName, offset, limit, reverse)
+}
+
+// GetPksSortedByCol retrieves PKs sorted by a column using the index.
+func GetPksSortedByCol(dbName, tableName, colName string, offset, limit int, reverse bool) ([]string, error) {
+	if globalDB == nil {
+		panic("global DB not initialized")
+	}
+	return globalDB.sm.GetPksSortedByCol(dbName, tableName, colName, offset, limit, reverse)
+}

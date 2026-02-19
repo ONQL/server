@@ -3,9 +3,10 @@ package common
 import "errors"
 
 var (
-	ErrNotFound      = errors.New("not found")
-	ErrDuplicate     = errors.New("duplicate entry")
-	ErrInvalidInput  = errors.New("invalid input")
+	ErrNotFound       = errors.New("not found")
+	ErrDuplicate      = errors.New("duplicate entry")
+	ErrInvalidInput   = errors.New("invalid input")
 	ErrDatabaseExists = errors.New("database already exists")
 	ErrTableExists    = errors.New("table already exists")
+	ErrStopIteration  = errors.New("stop iteration")
 )

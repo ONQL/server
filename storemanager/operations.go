@@ -45,6 +45,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"onql/common"
+	"sort"
 	"strconv"
 	"strings"
 )
@@ -395,6 +396,120 @@ func (sm *StoreManager) GetPkByIndex(dbName, tableName, colName, value string) (
 	return foundPKs, nil
 }
 
+// GetAllPksWithLimits retrieves primary keys for a table with offset and limit, considering optional ordering.
+// For now, it defaults to PK order. If reverse is true, it iterates in reverse order.
+func (sm *StoreManager) GetAllPksWithLimits(dbName, tableName string, offset, limit int, reverse bool) ([]string, error) {
+	dbID, table, err := sm.GetTableSchema(dbName, tableName)
+	if err != nil {
+		return nil, err
+	}
+
+	prefix := DataKey(dbID, table.ID, "")
+	prefixStr := string(prefix)
+
+	bufferInserts := make([]string, 0)
+	deletedPKs := make(map[string]struct{})
+
+	sm.buffer.mu.RLock()
+	for k, v := range sm.buffer.data {
+		if strings.HasPrefix(k, prefixStr) {
+			pk := k[len(prefixStr):]
+			if v.IsDeleted {
+				deletedPKs[pk] = struct{}{}
+			} else {
+				bufferInserts = append(bufferInserts, pk)
+			}
+		}
+	}
+	sm.buffer.mu.RUnlock()
+
+	// Sort Buffer
+	if reverse {
+		// Descending
+		sort.Sort(sort.Reverse(sort.StringSlice(bufferInserts)))
+	} else {
+		// Ascending
+		sort.Strings(bufferInserts)
+	}
+
+	var pks []string
+	seenPKs := make(map[string]struct{}) // To avoid duplicates and respect deletions
+
+	// Add deleted PKs to seen to avoid returning them from Disk
+	for k := range deletedPKs {
+		seenPKs[k] = struct{}{}
+	}
+
+	skipped := 0
+	collected := 0
+
+	// 1. Buffer Processing
+	for _, pk := range bufferInserts {
+		if limit > 0 && collected >= limit {
+			break
+		}
+
+		if skipped < offset {
+			skipped++
+			seenPKs[pk] = struct{}{} // Mark as seen (skipped) so disk doesn't duplicate
+			continue
+		}
+
+		pks = append(pks, pk)
+		seenPKs[pk] = struct{}{}
+		collected++
+	}
+
+	// 2. Disk Processing
+	remainingOffset := offset - skipped
+	if remainingOffset < 0 {
+		remainingOffset = 0
+	}
+
+	remainingLimit := 0
+	if limit > 0 {
+		remainingLimit = limit - collected
+		if remainingLimit <= 0 {
+			return pks, nil // Done
+		}
+	}
+
+	// Disk Iterator
+	currentDiskSkip := 0
+	currentDiskCount := 0
+
+	err = sm.engine.IteratePrefixWithLimit(prefix, 0, 0, reverse, func(k, v []byte) error {
+		// We use 0,0 for inner limit because we must manually skip due to masking (seenPKs)
+
+		if limit > 0 && currentDiskCount >= remainingLimit {
+			return common.ErrStopIteration
+		}
+
+		pk := string(k[len(prefix):])
+
+		if _, seen := seenPKs[pk]; seen {
+			// Already handled (in buffer or deleted)
+			return nil
+		}
+
+		// Valid candidate from disk
+		if currentDiskSkip < remainingOffset {
+			currentDiskSkip++
+			return nil
+		}
+
+		pks = append(pks, pk)
+		currentDiskCount++
+		return nil
+	})
+
+	if err != nil && err != common.ErrStopIteration {
+		return nil, err
+	}
+
+	return pks, nil
+}
+
 // GetAllPks retrieves all primary keys for a given table.
 func (sm *StoreManager) GetAllPks(dbName, tableName string) ([]string, error) {
 	dbID, table, err := sm.GetTableSchema(dbName, tableName)
@@ -474,4 +589,93 @@ func (sm *StoreManager) GetTableSchema(dbName, tableName string) (string, *Table
 		return "", nil, fmt.Errorf("table %s not found", tableName)
 	}
 	return db.ID, table, nil
+}
+
+// GetPksSortedByCol retrieves PKs sorted by a column using the index.
+// It iterates the index prefix IDX:db:table:col: and returns PKs.
+func (sm *StoreManager) GetPksSortedByCol(dbName, tableName, colName string, offset, limit int, reverse bool) ([]string, error) {
+	dbID, table, err := sm.GetTableSchema(dbName, tableName)
+	if err != nil {
+		return nil, err
+	}
+
+	colDef, ok := table.Columns[colName]
+	if !ok {
+		return nil, fmt.Errorf("column %s not found", colName)
+	}
+
+	// Index Prefix: IDX:dbID:tableID:colID:
+	prefix := fmt.Sprintf("IDX:%s:%s:%s:", dbID, table.ID, colDef.ID)
+	prefixBytes := []byte(prefix)
+
+	// Collect valid keys from Buffer and Disk (handling deletions)
+	validKeys := make([]string, 0)
+	seen := make(map[string]struct{}) // track keys to avoid duplicates and handle buffer priority
+
+	// 1. Buffer Handling
+	sm.buffer.mu.RLock()
+	for k, v := range sm.buffer.data {
+		if strings.HasPrefix(k, prefix) {
+			if v.IsDeleted {
+				seen[k] = struct{}{} // Mark as deleted (seen but excluded)
+			} else {
+				validKeys = append(validKeys, k)
+				seen[k] = struct{}{} // Mark as valid (seen)
+			}
+		}
+	}
+	sm.buffer.mu.RUnlock()
+
+	// 2. Disk Handling
+	// We iterate everything matching prefix.
+	// Optimally we would use IteratePrefixWithLimit if we knew buffer was empty,
+	// but for correctness with mixed Buffer/Disk, we scan all index entries.
+	err = sm.engine.IteratePrefix(prefixBytes, func(k, v []byte) error {
+		keyStr := string(k)
+		if _, ok := seen[keyStr]; !ok {
+			validKeys = append(validKeys, keyStr)
+		}
+		return nil
+	})
+	if err != nil {
+		return nil, err
+	}
+
+	// 3. Sort Keys
+	// Index Key: IDX:db:table:col:value:pk
+	// Sorting keys sorts by Value first (since value is before PK in key structure).
+	if reverse {
+		sort.Sort(sort.Reverse(sort.StringSlice(validKeys)))
+	} else {
+		sort.Strings(validKeys)
+	}
+
+	// 4. Apply Offset/Limit to Keys
+	if offset >= len(validKeys) {
+		return []string{}, nil
+	}
+	end := offset + limit
+	if limit == 0 || end > len(validKeys) {
+		end = len(validKeys)
+	}
+	slicedKeys := validKeys[offset:end]
+
+	// 5. Extract PKs
+	resultPKs := make([]string, 0, len(slicedKeys))
+	for _, key := range slicedKeys {
+		// Value of Index Entry?
+		// Insert puts PK as Value.
+		// Check buffer first
+		if val, exists, _ := sm.buffer.Get(key); exists {
+			resultPKs = append(resultPKs, string(val))
+		} else {
+			// Check disk
+			val, err := sm.engine.Get([]byte(key))
+			if err == nil {
+				resultPKs = append(resultPKs, string(val))
+			}
+		}
+	}
+
+	return resultPKs, nil
 }
