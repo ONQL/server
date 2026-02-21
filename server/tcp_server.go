@@ -68,10 +68,14 @@ func handleConnection(conn net.Conn) {
 
 	log.Printf("📡 New connection: %s", connID)
 
+	// Per-connection write mutex — prevents concurrent goroutines from
+	// interleaving binary frames on the same conn.Write.
+	var writeMu sync.Mutex
+
 	// Response handler for this connection
 	sendResponse := func(response string) {
-		handlers.mu.Lock()
-		defer handlers.mu.Unlock()
+		writeMu.Lock()
+		defer writeMu.Unlock()
 
 		response += endOfMessage
 		if _, err := conn.Write([]byte(response)); err != nil {
