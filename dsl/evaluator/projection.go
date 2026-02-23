@@ -34,6 +34,27 @@ func (e *Evaluator) EvalProjection() error {
 			}
 			tableData = append(tableData, row)
 		}
+	case map[string]any:
+		// Single row from row-access or context sub-query result
+		tableData = []map[string]any{sv}
+	case []string:
+		if len(sv) > 0 {
+			return fmt.Errorf("projection: cannot project string list as map rows")
+		}
+		tableData = make([]map[string]any, 0)
+	case []float64:
+		if len(sv) > 0 {
+			return fmt.Errorf("projection: cannot project float list as map rows")
+		}
+		tableData = make([]map[string]any, 0)
+	case []int64:
+		if len(sv) > 0 {
+			return fmt.Errorf("projection: cannot project int list as map rows")
+		}
+		tableData = make([]map[string]any, 0)
+	case bool:
+		// Boolean left in memory by a filter expression — treat as no rows
+		tableData = make([]map[string]any, 0)
 	default:
 		return fmt.Errorf("projection: expected table data, got %T", sourceValue)
 	}

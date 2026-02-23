@@ -23,9 +23,42 @@ func (e *Evaluator) EvalFilter() error {
 	// fmt.Println(e.Memory)
 	// fmt.Println(filterStmt.Sources[0].SourceValue)
 	//get data from start filter table
-	tableData, ok := e.Memory[filterStmt.Sources[0].SourceValue].([]map[string]any)
-	if !ok {
-		return errors.New("expect table data for filter but got " + fmt.Sprintf("%T", e.Memory[filterStmt.Sources[0].SourceValue]))
+	var tableData []map[string]any
+	switch sv := e.Memory[filterStmt.Sources[0].SourceValue].(type) {
+	case []map[string]any:
+		tableData = sv
+	case nil:
+		tableData = make([]map[string]any, 0)
+	case []any:
+		tableData = make([]map[string]any, 0, len(sv))
+		for _, item := range sv {
+			row, ok := item.(map[string]any)
+			if !ok {
+				return fmt.Errorf("filter: expected map row in []any, got %T", item)
+			}
+			tableData = append(tableData, row)
+		}
+	case map[string]any:
+		tableData = []map[string]any{sv}
+	case []string:
+		if len(sv) > 0 {
+			return fmt.Errorf("filter: cannot filter string list as map rows")
+		}
+		tableData = make([]map[string]any, 0)
+	case []float64:
+		if len(sv) > 0 {
+			return fmt.Errorf("filter: cannot filter float list as map rows")
+		}
+		tableData = make([]map[string]any, 0)
+	case []int64:
+		if len(sv) > 0 {
+			return fmt.Errorf("filter: cannot filter int list as map rows")
+		}
+		tableData = make([]map[string]any, 0)
+	case bool:
+		tableData = make([]map[string]any, 0)
+	default:
+		return fmt.Errorf("filter: expected table data, got %T", e.Memory[filterStmt.Sources[0].SourceValue])
 	}
 	if len(tableData) == 0 {
 		nested := 0
