@@ -38,25 +38,6 @@ func (e *Evaluator) EvalFilter() error {
 			}
 			tableData = append(tableData, row)
 		}
-	case map[string]any:
-		tableData = []map[string]any{sv}
-	case []string:
-		if len(sv) > 0 {
-			return fmt.Errorf("filter: cannot filter string list as map rows")
-		}
-		tableData = make([]map[string]any, 0)
-	case []float64:
-		if len(sv) > 0 {
-			return fmt.Errorf("filter: cannot filter float list as map rows")
-		}
-		tableData = make([]map[string]any, 0)
-	case []int64:
-		if len(sv) > 0 {
-			return fmt.Errorf("filter: cannot filter int list as map rows")
-		}
-		tableData = make([]map[string]any, 0)
-	case bool:
-		tableData = make([]map[string]any, 0)
 	default:
 		return fmt.Errorf("filter: expected table data, got %T", e.Memory[filterStmt.Sources[0].SourceValue])
 	}
@@ -85,6 +66,7 @@ func (e *Evaluator) EvalFilter() error {
 			}
 		}
 	} else {
+		var savedEndFilterPos int
 		for _, row := range tableData {
 			// Apply filter conditions
 			// e.Memory[filterStmt.Name] = row
@@ -92,7 +74,8 @@ func (e *Evaluator) EvalFilter() error {
 			for {
 				stmt := e.Plan.NextStatement(false)
 				if stmt == nil || stmt.Operation == parser.OpEndFilter {
-					endFilterPos = e.Plan.Pos
+					endFilterPos = e.Plan.Pos 
+					savedEndFilterPos = endFilterPos
 					endFilterName = stmt.Name
 					e.Plan.NextStatement(true) // move to next statement
 					break
@@ -110,6 +93,7 @@ func (e *Evaluator) EvalFilter() error {
 			// Restore original position for next filter
 			e.Plan.Pos = pos
 		}
+		endFilterPos = savedEndFilterPos
 	}
 	e.Plan.Pos = endFilterPos
 	e.Plan.NextStatement(true) // Move past OpEndFilter

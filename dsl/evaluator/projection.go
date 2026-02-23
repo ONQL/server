@@ -34,27 +34,9 @@ func (e *Evaluator) EvalProjection() error {
 			}
 			tableData = append(tableData, row)
 		}
-	case map[string]any:
-		// Single row from row-access or context sub-query result
-		tableData = []map[string]any{sv}
-	case []string:
-		if len(sv) > 0 {
-			return fmt.Errorf("projection: cannot project string list as map rows")
-		}
-		tableData = make([]map[string]any, 0)
-	case []float64:
-		if len(sv) > 0 {
-			return fmt.Errorf("projection: cannot project float list as map rows")
-		}
-		tableData = make([]map[string]any, 0)
-	case []int64:
-		if len(sv) > 0 {
-			return fmt.Errorf("projection: cannot project int list as map rows")
-		}
-		tableData = make([]map[string]any, 0)
-	case bool:
-		// Boolean left in memory by a filter expression — treat as no rows
-		tableData = make([]map[string]any, 0)
+	// case map[string]any:
+	// 	// Single row from row-access or context sub-query result
+	// 	tableData = []map[string]any{sv}
 	default:
 		return fmt.Errorf("projection: expected table data, got %T", sourceValue)
 	}
@@ -88,6 +70,7 @@ func (e *Evaluator) EvalProjection() error {
 			}
 		}
 	} else {
+		var savedEndProjectionPos int
 		for _, row := range tableData {
 			e.SetMemoryValue(pStmt.Name, row)
 			obj := make(map[string]any)
@@ -106,6 +89,7 @@ func (e *Evaluator) EvalProjection() error {
 				case parser.OpEndProjection:
 					endProjectionName = stmt.Name
 					endProjectionPos = e.Plan.Pos
+					savedEndProjectionPos = endProjectionPos
 				default:
 					if err := e.EvalStatement(); err != nil {
 						return err
@@ -118,8 +102,9 @@ func (e *Evaluator) EvalProjection() error {
 
 			result = append(result, obj)
 			e.Plan.Pos = pos
-			endProjectionPos = 0 // reset so next row's inner loop works
+			endProjectionPos = 0 // reset so next row's inner loop restarts
 		}
+		endProjectionPos = savedEndProjectionPos // restore after all rows
 	}
 
 	e.Plan.Pos = endProjectionPos
