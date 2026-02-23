@@ -7,6 +7,17 @@ import (
 )
 
 func (e *Evaluator) Eval() error {
+	// Debug: print all plan statements with their sources
+	fmt.Println("=== PLAN STATEMENTS ===")
+	for i, s := range e.Plan.Statements {
+		sources := ""
+		for _, src := range s.Sources {
+			sources += "[" + src.SourceValue + "] "
+		}
+		fmt.Printf("  [%d] name=%-6s op=%-30s sources=%s\n", i, s.Name, s.Operation, sources)
+	}
+	fmt.Println("=======================")
+
 	for {
 		// Check for timeout/cancellation
 		select {

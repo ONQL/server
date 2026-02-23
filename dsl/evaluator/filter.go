@@ -60,19 +60,23 @@ func (e *Evaluator) EvalFilter() error {
 	default:
 		return fmt.Errorf("filter: expected table data, got %T", e.Memory[filterStmt.Sources[0].SourceValue])
 	}
+
 	if len(tableData) == 0 {
 		nested := 0
 		for {
 			stmt := e.Plan.NextStatement(true)
 			if stmt == nil {
-				return fmt.Errorf("expect ] but got empty in projection")
+				return fmt.Errorf("expect ] but got empty in filteration")
 			}
 			if stmt.Operation == parser.OpEndFilter {
 				if nested > 0 {
 					nested -= 1
 					continue
 				}
-				endFilterPos = e.Plan.Pos
+				// NextStatement(true) already advanced past EFT; subtract 1 so
+				// the final NextStatement(true) below lands on EFT and moves to
+				// the statement after it (e.g. StartProjection).
+				endFilterPos = e.Plan.Pos - 1
 				endFilterName = stmt.Name
 				break
 			}
@@ -111,6 +115,10 @@ func (e *Evaluator) EvalFilter() error {
 	e.Plan.NextStatement(true) // Move past OpEndFilter
 	// e.Memory[endFilterName] = result
 	e.SetMemoryValue(endFilterName, result)
+	// Also write result under the start-filter name so projection (which links
+	// its source to the OpStartFilter statement) reads the full []map[string]any
+	// result instead of the last per-row iteration value (map[string]any).
+	// e.SetMemoryValue(filterStmt.Name, result)
 	fmt.Println(result)
 	return nil
 }

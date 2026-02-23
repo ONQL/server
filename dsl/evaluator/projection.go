@@ -80,7 +80,9 @@ func (e *Evaluator) EvalProjection() error {
 					nested--
 				} else {
 					endProjectionName = stmt.Name
-					endProjectionPos = e.Plan.Pos
+					// NextStatement(true) already advanced past EPJ; subtract 1 so
+					// the final NextStatement(true) below lands on EPJ and moves past it.
+					endProjectionPos = e.Plan.Pos - 1
 					found = true
 				}
 			}
