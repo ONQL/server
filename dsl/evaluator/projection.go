@@ -43,29 +43,25 @@ func (e *Evaluator) EvalProjection() error {
 
 	if len(tableData) == 0 {
 		// Fast-skip: consume all statements until the matching OpEndProjection.
-		// Track nesting for both OpStartProjection (inner projections) and
-		// OpStartProjectionKey (keys whose values may themselves contain a nested {...}).
+		// Track nesting only for nested projections (OpStartProjection/OpEndProjection pairs).
 		nested := 0
-		for {
+		found := false
+		for !found {
 			stmt := e.Plan.NextStatement(true)
 			if stmt == nil {
 				return fmt.Errorf("projection: unexpected end of plan, expected '}'")
 			}
 			switch stmt.Operation {
-			case parser.OpStartProjection, parser.OpStartProjectionKey:
+			case parser.OpStartProjection:
 				nested++
-			case parser.OpEndProjectionKey:
-				nested--
 			case parser.OpEndProjection:
 				if nested > 0 {
 					nested--
-					continue
+				} else {
+					endProjectionName = stmt.Name
+					endProjectionPos = e.Plan.Pos
+					found = true
 				}
-				endProjectionName = stmt.Name
-				endProjectionPos = e.Plan.Pos
-			}
-			if endProjectionPos > 0 {
-				break
 			}
 		}
 	} else {
