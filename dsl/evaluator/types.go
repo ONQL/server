@@ -244,3 +244,4 @@ func getStructureType(val any) string {
 		return strings.ToUpper(fmt.Sprintf("%T", val))
 	}
 }
+

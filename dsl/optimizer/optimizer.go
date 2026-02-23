@@ -18,50 +18,50 @@ func NewOptimizer(plan *parser.Plan) *Optimizer {
 
 // Optimize applies optimization rules to the plan
 func (opt *Optimizer) Optimize() error {
-	var newStatements []*parser.Statement
 	stmts := opt.Plan.Statements
-	skipIndices := make(map[int]bool)
 
 	for i := 0; i < len(stmts); i++ {
-		if skipIndices[i] {
-			continue
-		}
 		stmt := stmts[i]
 
 		// We currently only optimize Table Access patterns
 		if stmt.Operation == parser.OpAccessTable {
-			if i+1 < len(stmts) && !skipIndices[i+1] {
+			if i+1 < len(stmts) {
 				nextStmt := stmts[i+1]
 
 				// Try to match and apply optimization rules based on the next statement
 				if nextStmt.Operation == parser.OpSlice {
 					if opt.OptimizeSlice(stmt, nextStmt) {
-						skipIndices[i+1] = true
+						markOptimized(nextStmt)
 					}
 				} else if nextStmt.Operation == parser.OpStartFilter {
 					// Check for Filter -> Slice
 					if skipped := opt.OptimizeFilterSlice(stmts, i); skipped > 0 {
-						skipIndices[i+skipped] = true
+						markOptimized(stmts[i+skipped])
 					} else if skippedIndices := opt.OptimizeFilterSortSlice(stmts, i); len(skippedIndices) > 0 {
 						// Check for Filter -> Sort -> Slice
 						for _, idx := range skippedIndices {
-							skipIndices[i+idx] = true
+							markOptimized(stmts[i+idx])
 						}
 					}
 				} else if nextStmt.Operation == parser.OpAggregateReduce {
 					if skipped := opt.OptimizeSortSlice(stmts, i); skipped > 0 {
 						for k := 1; k <= skipped; k++ {
-							skipIndices[i+k] = true
+							markOptimized(stmts[i+k])
 						}
 					}
 				}
 			}
 		}
-		newStatements = append(newStatements, stmt)
 	}
 
-	opt.Plan.Statements = newStatements
 	return nil
+}
+
+func markOptimized(stmt *parser.Statement) {
+	if stmt.Meta == nil {
+		stmt.Meta = make(map[string]string)
+	}
+	stmt.Meta["optimized"] = "true"
 }
 
 // OptimizeSlice handles the pattern: AccessTable -> Slice

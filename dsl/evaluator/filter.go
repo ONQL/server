@@ -134,6 +134,11 @@ func (e *Evaluator) EvalSlice() error {
 	if stmt.Operation != parser.OpSlice {
 		return fmt.Errorf("expected slice operation")
 	}
+	// Slice was absorbed by the table access optimizer; just forward the data.
+	if stmt.Meta["optimized"] == "true" {
+		e.SetMemoryValue(stmt.Name, e.Memory[stmt.Sources[0].SourceValue])
+		return nil
+	}
 	sliceParts := strings.Split(stmt.Expressions.(string), ":")
 	data := e.Memory[stmt.Sources[0].SourceValue]
 
