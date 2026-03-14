@@ -15,6 +15,7 @@ import (
 //   - Multi-group:      col1=v1 and (col2=v2 or col3=v3) and col4=v4
 //
 // Returns nil when any condition uses a non-equality operator (!=, <, >, etc.)
+// or when the column reference is a relational/nested access (e.g. category[0].name),
 // so the caller falls back to in-memory filter evaluation.
 //
 // Strategy: walk every statement inside the filter block. For each NO statement:
@@ -62,21 +63,36 @@ func ParseFilters(plan *parser.Plan) []string {
 			}
 
 			var colName, colVal string
-			isColOp := func(s *parser.Statement) bool {
-				return s.Operation == parser.OpAccessList || s.Operation == parser.OpAccessField
+
+			// isDirectColOp checks that s is a direct column access on the filtered
+			// table — its source must be the StartFilter statement itself.
+			// Relational accesses like category[0].name have an intermediate ATR/ART
+			// in the source chain (ARF → ATR → ART → SFT), so their source is NOT
+			// SFT and they correctly fall through to the default case, which returns
+			// nil and forces in-memory evaluation.
+			isDirectColOp := func(s *parser.Statement) bool {
+				if s.Operation != parser.OpAccessList && s.Operation != parser.OpAccessField {
+					return false
+				}
+				if len(s.Sources) == 0 {
+					return false
+				}
+				srcStmt := plan.StatementMap[s.Sources[0].SourceValue]
+				return srcStmt != nil && srcStmt.Operation == parser.OpStartFilter
 			}
 
 			switch {
-			case isColOp(leftStmt) && rightStmt.Operation == parser.OpLiteral:
+			case isDirectColOp(leftStmt) && rightStmt.Operation == parser.OpLiteral:
 				colName = leftStmt.Meta["name"]
 				colVal = rightStmt.Expressions.(string)
-			case isColOp(rightStmt) && leftStmt.Operation == parser.OpLiteral:
+			case isDirectColOp(rightStmt) && leftStmt.Operation == parser.OpLiteral:
 				// val = col  (reversed — treat same as col = val)
 				colName = rightStmt.Meta["name"]
 				colVal = leftStmt.Expressions.(string)
 			default:
-				// Operands are not a simple col/literal pair (e.g. col = col, or a
-				// sub-expression result). We cannot push this down via index.
+				// Operands are not a simple col/literal pair (e.g. col = col,
+				// relational access like category[0].name, or a sub-expression).
+				// We cannot push this down via index.
 				return nil
 			}
 

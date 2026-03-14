@@ -32,3 +32,6 @@ Thumbs.db
 # Temporary files
 tmp/
 temp/
+
+# Cluster (enterprise paid feature — not open source)
+cluster/
