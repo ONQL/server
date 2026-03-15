@@ -3,6 +3,7 @@ package api
 import (
 	"context"
 	"encoding/json"
+	"fmt"
 	"onql/dsl"
 	"time"
 )
@@ -38,7 +39,6 @@ func HandleInsert(payload string) map[string]string {
 		return map[string]string{"error": err.Error(), "data": ""}
 	}
 
-	// Call the insert function and get the generated ID
 	id, err := db.Insert(insData.DB, insData.Table, insData.Records)
 	if err != nil {
 		return map[string]string{"error": err.Error(), "data": ""}
@@ -57,7 +57,6 @@ func HandleUpdate(payload string) map[string]string {
 
 	pks := []string{}
 
-	// If query is provided, execute it to get primary keys
 	if updData.Query != "" {
 		ctx, cancel := context.WithTimeout(context.Background(), 60*time.Second)
 		defer cancel()
@@ -77,12 +76,10 @@ func HandleUpdate(payload string) map[string]string {
 		}
 	}
 
-	// If IDs are provided directly, use them
 	if len(updData.Ids) != 0 {
 		pks = updData.Ids
 	}
 
-	// Update each record
 	var payloadError string
 	for _, pk := range pks {
 		updData.Records["id"] = pk
@@ -110,7 +107,6 @@ func HandleDelete(payload string) map[string]string {
 
 	pks := []string{}
 
-	// If query is provided, execute it to get primary keys
 	if delData.Query != "" {
 		ctx, cancel := context.WithTimeout(context.Background(), 60*time.Second)
 		defer cancel()
@@ -130,12 +126,10 @@ func HandleDelete(payload string) map[string]string {
 		}
 	}
 
-	// If IDs are provided directly, use them
 	if len(delData.Ids) != 0 {
 		pks = delData.Ids
 	}
 
-	// Delete each record
 	if len(pks) != 0 {
 		for _, pk := range pks {
 			err := db.Delete(delData.DB, delData.Table, pk)
@@ -150,21 +144,51 @@ func HandleDelete(payload string) map[string]string {
 
 // HandleInsertRequest handles insert API requests
 func HandleInsertRequest(msg *Message) string {
+	_, finish := StartQueryTrace("insert", fmt.Sprintf("%s.%s", extractField(msg.Payload, "db"), extractField(msg.Payload, "table")), len(msg.Payload))
 	result := HandleInsert(msg.Payload)
 	data, _ := json.Marshal(result)
-	return string(data)
+	resp := string(data)
+	finish(resp, result["error"])
+	return resp
 }
 
 // HandleUpdateRequest handles update API requests
 func HandleUpdateRequest(msg *Message) string {
+	query := extractField(msg.Payload, "query")
+	if query == "" {
+		query = fmt.Sprintf("%s.%s", extractField(msg.Payload, "db"), extractField(msg.Payload, "table"))
+	}
+	_, finish := StartQueryTrace("update", query, len(msg.Payload))
 	result := HandleUpdate(msg.Payload)
 	data, _ := json.Marshal(result)
-	return string(data)
+	resp := string(data)
+	finish(resp, result["error"])
+	return resp
 }
 
 // HandleDeleteRequest handles delete API requests
 func HandleDeleteRequest(msg *Message) string {
+	query := extractField(msg.Payload, "query")
+	if query == "" {
+		query = fmt.Sprintf("%s.%s", extractField(msg.Payload, "db"), extractField(msg.Payload, "table"))
+	}
+	_, finish := StartQueryTrace("delete", query, len(msg.Payload))
 	result := HandleDelete(msg.Payload)
 	data, _ := json.Marshal(result)
-	return string(data)
+	resp := string(data)
+	finish(resp, result["error"])
+	return resp
+}
+
+func extractField(payload string, key string) string {
+	var m map[string]any
+	if err := json.Unmarshal([]byte(payload), &m); err != nil {
+		return ""
+	}
+	if v, ok := m[key]; ok {
+		if s, ok := v.(string); ok {
+			return s
+		}
+	}
+	return ""
 }

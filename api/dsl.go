@@ -22,7 +22,8 @@ func handleDSLRequest(msg *Message) string {
 		return errorResponse(fmt.Sprintf("invalid payload: %v", err))
 	}
 
-	// Create context with timeout of 60 seconds
+	_, finish := StartQueryTrace("onql", req.Query, len(msg.Payload))
+
 	ctx, cancel := context.WithTimeout(context.Background(), 60*time.Second)
 	defer cancel()
 
@@ -32,11 +33,15 @@ func handleDSLRequest(msg *Message) string {
 		"data":  result,
 		"error": "",
 	}
+	errMsg := ""
 	if err != nil {
-		response["error"] = err.Error()
+		errMsg = err.Error()
+		response["error"] = errMsg
 		response["data"] = nil
 	}
 
 	data, _ := json.Marshal(response)
-	return string(data)
+	resp := string(data)
+	finish(resp, errMsg)
+	return resp
 }
