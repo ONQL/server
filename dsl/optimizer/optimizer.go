@@ -80,6 +80,7 @@ func (opt *Optimizer) OptimizeSlice(stmt *parser.Statement, sliceStmt *parser.St
 func (opt *Optimizer) OptimizeFilterSlice(stmts []*parser.Statement, index int) int {
 	nesting := 0
 	endFilterIdx := -1
+	canPushDown := true
 	for j := index + 1; j < len(stmts); j++ {
 		if stmts[j].Operation == parser.OpStartFilter {
 			nesting++
@@ -89,7 +90,29 @@ func (opt *Optimizer) OptimizeFilterSlice(stmts []*parser.Statement, index int) 
 				endFilterIdx = j
 				break
 			}
+		} else if nesting > 0 {
+			// Check if the filter contains non-pushdownable operations
+			// (e.g. _like, _asc, _desc and other aggregate functions).
+			// When present, ParseFilters will return nil, so we must not
+			// push LIMIT/OFFSET down — the slice must be applied after
+			// in-memory filter evaluation.
+			if stmts[j].Operation == parser.OpAggregateReduce {
+				canPushDown = false
+			}
+			if stmts[j].Operation == parser.OpNormalOperation {
+				parts := strings.Split(stmts[j].Expressions.(string), " ")
+				if len(parts) >= 3 {
+					op := strings.ToLower(strings.TrimSpace(parts[1]))
+					if op != "=" && op != "==" && op != "and" && op != "or" {
+						canPushDown = false
+					}
+				}
+			}
 		}
+	}
+
+	if !canPushDown {
+		return 0
 	}
 
 	if endFilterIdx != -1 && endFilterIdx+1 < len(stmts) {
@@ -138,6 +161,7 @@ func (opt *Optimizer) OptimizeSortSlice(stmts []*parser.Statement, index int) in
 func (opt *Optimizer) OptimizeFilterSortSlice(stmts []*parser.Statement, index int) []int {
 	nesting := 0
 	endFilterIdx := -1
+	canPushDown := true
 	for j := index + 1; j < len(stmts); j++ {
 		if stmts[j].Operation == parser.OpStartFilter {
 			nesting++
@@ -147,7 +171,24 @@ func (opt *Optimizer) OptimizeFilterSortSlice(stmts []*parser.Statement, index i
 				endFilterIdx = j
 				break
 			}
+		} else if nesting > 0 {
+			if stmts[j].Operation == parser.OpAggregateReduce {
+				canPushDown = false
+			}
+			if stmts[j].Operation == parser.OpNormalOperation {
+				parts := strings.Split(stmts[j].Expressions.(string), " ")
+				if len(parts) >= 3 {
+					op := strings.ToLower(strings.TrimSpace(parts[1]))
+					if op != "=" && op != "==" && op != "and" && op != "or" {
+						canPushDown = false
+					}
+				}
+			}
 		}
+	}
+
+	if !canPushDown {
+		return nil
 	}
 
 	if endFilterIdx != -1 && endFilterIdx+1 < len(stmts) {
