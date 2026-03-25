@@ -99,6 +99,15 @@ func (opt *Optimizer) OptimizeFilterSlice(stmts []*parser.Statement, index int) 
 			if stmts[j].Operation == parser.OpAggregateReduce {
 				canPushDown = false
 			}
+			// Relational/nested access (e.g. category[0].name) inside
+			// the filter means ParseFilters will return nil at runtime.
+			// We must not push LIMIT/OFFSET down in that case, or the
+			// slice would apply to unfiltered data.
+			if stmts[j].Operation == parser.OpAccessField ||
+				stmts[j].Operation == parser.OpAccessRelatedTable ||
+				stmts[j].Operation == parser.OpAccessRow {
+				canPushDown = false
+			}
 			if stmts[j].Operation == parser.OpNormalOperation {
 				parts := strings.Split(stmts[j].Expressions.(string), " ")
 				if len(parts) >= 3 {
@@ -173,6 +182,11 @@ func (opt *Optimizer) OptimizeFilterSortSlice(stmts []*parser.Statement, index i
 			}
 		} else if nesting > 0 {
 			if stmts[j].Operation == parser.OpAggregateReduce {
+				canPushDown = false
+			}
+			if stmts[j].Operation == parser.OpAccessField ||
+				stmts[j].Operation == parser.OpAccessRelatedTable ||
+				stmts[j].Operation == parser.OpAccessRow {
 				canPushDown = false
 			}
 			if stmts[j].Operation == parser.OpNormalOperation {
