@@ -746,9 +746,11 @@ func _like(stmt *parser.Statement, data any, aggrObj parser.Aggr, e *Evaluator) 
 		pattern = aggrObj.Args[0]
 	}
 
-	// Convert SQL LIKE to regex
-	regexPatternStr := strings.ReplaceAll(pattern, "%", ".*")
-	regexPatternStr = strings.ReplaceAll(regexPatternStr, "_", ".")
+	// Convert SQL LIKE pattern to regex (only % is a wildcard)
+	const percentPlaceholder = "\x00PCT\x00"
+	regexPatternStr := strings.ReplaceAll(pattern, "%", percentPlaceholder)
+	regexPatternStr = regexp.QuoteMeta(regexPatternStr)
+	regexPatternStr = strings.ReplaceAll(regexPatternStr, percentPlaceholder, ".*")
 	regexPattern, err := regexp.Compile("^" + regexPatternStr + "$")
 	if err != nil {
 		return fmt.Errorf("_like: invalid pattern: %w", err)
