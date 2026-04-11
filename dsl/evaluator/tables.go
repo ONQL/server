@@ -269,20 +269,46 @@ func (e *Evaluator) EvalTableRow() error {
 	// if e.Plan.StatementMap[stmt.Expressions.(string)].Operation == parser.OpUnknownIdentifier {
 	// } else {
 	// }
-	switch e.Memory[sourceName].(type) {
+	idx := stmt.Expressions.(int64)
+	inRange := func(n int) bool {
+		if idx < 0 {
+			idx = int64(n) + idx
+		}
+		return idx >= 0 && idx < int64(n)
+	}
+	switch s := e.Memory[sourceName].(type) {
 	case []map[string]any:
-		row2 := e.Memory[sourceName].([]map[string]any)[stmt.Expressions.(int64)]
-		// e.Memory[stmt.Name] = row2
-		e.SetMemoryValue(stmt.Name, row2)
+		if !inRange(len(s)) {
+			e.SetMemoryValue(stmt.Name, nil)
+		} else {
+			e.SetMemoryValue(stmt.Name, s[idx])
+		}
 	case []any:
-		row2 := e.Memory[sourceName].([]any)[stmt.Expressions.(int64)]
-		e.SetMemoryValue(stmt.Name, row2)
+		if !inRange(len(s)) {
+			e.SetMemoryValue(stmt.Name, nil)
+		} else {
+			e.SetMemoryValue(stmt.Name, s[idx])
+		}
 	case []string:
-		e.SetMemoryValue(stmt.Name, e.Memory[sourceName].([]string)[stmt.Expressions.(int64)])
-		// e.Memory[stmt.Name+"_meta_type"] = "STRING"
-	case []float64, []int64:
-		e.SetMemoryValue(stmt.Name, e.Memory[sourceName].([]float64)[stmt.Expressions.(int64)])
-		// e.Memory[stmt.Name+"_meta_type"] = "NUMBER"
+		if !inRange(len(s)) {
+			e.SetMemoryValue(stmt.Name, nil)
+		} else {
+			e.SetMemoryValue(stmt.Name, s[idx])
+		}
+	case []float64:
+		if !inRange(len(s)) {
+			e.SetMemoryValue(stmt.Name, nil)
+		} else {
+			e.SetMemoryValue(stmt.Name, s[idx])
+		}
+	case []int64:
+		if !inRange(len(s)) {
+			e.SetMemoryValue(stmt.Name, nil)
+		} else {
+			e.SetMemoryValue(stmt.Name, s[idx])
+		}
+	case nil:
+		e.SetMemoryValue(stmt.Name, nil)
 	default:
 		return errors.New("expected array for row access for table row access")
 	}
