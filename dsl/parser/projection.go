@@ -59,10 +59,15 @@ func (plan *Plan) ParseProjection() error {
 		// Parse key internal statements
 		for {
 			token = plan.lexer.Next(false)
-			if token == nil || token.Type == TOKEN_RCURLEY || token.Type == TOKEN_COMMA {
-				plan.lexer.Next(true) // consume the comma or closing brace
+			if token == nil || token.Type == TOKEN_RCURLEY {
+				// Leave the closing brace for the outer loop to consume,
+				// so it terminates only the current projection level.
 				break
-			} 
+			}
+			if token.Type == TOKEN_COMMA {
+				plan.lexer.Next(true) // consume the comma
+				break
+			}
 			if err := plan.ParseStatement(); err != nil {
 				return err
 			}
