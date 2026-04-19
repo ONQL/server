@@ -1,0 +1,122 @@
+version: 2
+
+project_name: onql-server
+
+before:
+  hooks:
+    - go mod tidy
+
+builds:
+  - id: onql-server
+    main: ./cmd/server
+    binary: onql-server
+    env:
+      - CGO_ENABLED=0
+    ldflags:
+      - -s -w
+      - -X main.version={{.Version}}
+      - -X main.commit={{.Commit}}
+      - -X main.date={{.Date}}
+    goos:
+      - linux
+      - windows
+      - darwin
+      - freebsd
+    goarch:
+      - amd64
+      - arm64
+      - "386"
+      - arm
+    goarm:
+      - "7"
+    ignore:
+      - goos: darwin
+        goarch: "386"
+      - goos: darwin
+        goarch: arm
+      - goos: freebsd
+        goarch: "386"
+      - goos: freebsd
+        goarch: arm
+      - goos: windows
+        goarch: arm
+
+archives:
+  - id: default
+    formats: [tar.gz]
+    name_template: >-
+      {{ .ProjectName }}_{{ .Version }}_
+      {{- if eq .Os "darwin" }}macOS
+      {{- else }}{{ title .Os }}{{ end }}_
+      {{- if eq .Arch "amd64" }}x86_64
+      {{- else if eq .Arch "386" }}i386
+      {{- else }}{{ .Arch }}{{ end }}
+    format_overrides:
+      - goos: windows
+        formats: [zip]
+    files:
+      - README.md
+      - LICENSE*
+
+nfpms:
+  - id: linux-packages
+    package_name: onql-server
+    vendor: Autobit Software Services Private Limited
+    homepage: https://onql.org
+    maintainer: ONQL <team@onql.org>
+    description: |
+      ONQL — Object Notation Query Language server.
+      Embedded message-based RDBMS built on BadgerDB with a JSON-over-TCP
+      protocol, declarative schema, and context-aware query language.
+    license: BUSL-1.1
+    formats:
+      - deb
+      - rpm
+      - apk
+    bindir: /usr/local/bin
+    contents:
+      - src: README.md
+        dst: /usr/share/doc/onql-server/README.md
+      - src: LICENSE*
+        dst: /usr/share/doc/onql-server/
+
+checksum:
+  name_template: "checksums.txt"
+
+snapshot:
+  version_template: "{{ incpatch .Version }}-next"
+
+changelog:
+  sort: asc
+  use: github
+  filters:
+    exclude:
+      - "^docs:"
+      - "^test:"
+      - "^chore:"
+      - "Merge pull request"
+      - "Merge branch"
+  groups:
+    - title: Features
+      regexp: "^.*feat[(\\w)]*:+.*$"
+      order: 0
+    - title: "Bug fixes"
+      regexp: "^.*fix[(\\w)]*:+.*$"
+      order: 1
+    - title: Others
+      order: 999
+
+release:
+  github:
+    owner: ONQL
+    name: server
+  draft: false
+  prerelease: auto
+  name_template: "ONQL Server {{.Tag}}"
+  header: |
+    ## ONQL Server {{.Tag}}
+
+    Download the binary for your platform below. Linux users can also install via `.deb`, `.rpm`, or `.apk`.
+  footer: |
+    ---
+    **Full changelog**: https://github.com/ONQL/server/compare/{{ .PreviousTag }}...{{ .Tag }}
